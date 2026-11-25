@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "ZONA",
+    "slug": "zona-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "zona",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.zona.messenger",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ZONA menggunakan lokasimu untuk menampilkan posisi di Live Social Map sesuai mode privasi (Tepat, Area, atau Ghost).",
+        "NSMicrophoneUsageDescription": "ZONA memerlukan mikrofon untuk Voice Note dan Voice Lounge."
+      }
+    },
+    "android": {
+      "package": "app.zona.messenger",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO"
+      ]
+    }
+  }
+}
