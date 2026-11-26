@@ -1,8 +1,10 @@
-import { Map, MessageCircle, Plus, Settings } from 'lucide-react';
+import { Map, MessageCircle, Moon, Plus, Settings, Sun } from 'lucide-react';
 import { useZonaStore } from '@zona/shared';
 import { Avatar } from './Avatar';
 
 interface CircleRailProps {
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
   fullMapMode: boolean;
   onToggleFullMap: () => void;
   onSelectChatSpace: () => void;
@@ -11,6 +13,8 @@ interface CircleRailProps {
 }
 
 export function CircleRail({
+  theme,
+  onToggleTheme,
   fullMapMode,
   onToggleFullMap,
   onSelectChatSpace,
@@ -59,7 +63,7 @@ export function CircleRail({
             key={circle.id}
             id={`rail-circle-${circle.id}`}
             type="button"
-            className={`rail-btn ${isActive ? 'active' : ''}`}
+            className={`rail-btn circle-code-btn ${isActive ? 'active' : ''}`}
             style={
               isActive
                 ? { background: circle.accentColor, color: '#FFFFFF' }
@@ -72,7 +76,7 @@ export function CircleRail({
             title={circle.name}
             aria-label={circle.name}
           >
-            {circle.shortCode}
+            <span>{circle.shortCode}</span>
             {unread > 0 && (
               <span className="rail-badge" style={{ background: circle.accentColor }}>
                 {unread}
@@ -101,9 +105,24 @@ export function CircleRail({
         className={`rail-btn subtle ${fullMapMode ? 'active' : ''}`}
         onClick={onToggleFullMap}
         title={fullMapMode ? 'Kembali ke Obrolan' : 'Buka Peta Layar Penuh'}
-        aria-label="Peta"
+        aria-label="Peta Layar Penuh"
       >
         <Map size={19} strokeWidth={1.75} />
+      </button>
+
+      <button
+        id="rail-theme-toggle"
+        type="button"
+        className="rail-btn subtle"
+        onClick={onToggleTheme}
+        title={theme === 'dark' ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+        aria-label="Ganti Tema"
+      >
+        {theme === 'dark' ? (
+          <Sun size={19} strokeWidth={1.75} />
+        ) : (
+          <Moon size={19} strokeWidth={1.75} />
+        )}
       </button>
 
       <button

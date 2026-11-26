@@ -44,6 +44,7 @@ export interface Circle {
   shortCode: string;
   accentColor: string;
   bannerStyle?: CircleBannerStyle;
+  bannerImage?: string;
   inviteCode: string;
   description: string;
   memberIds: string[];

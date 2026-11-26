@@ -29,7 +29,7 @@ import {
   type PlaceSuggestion,
   type PrivacyMode,
 } from '@zona/shared';
-import { Avatar, renderAvatarSvgMarkup, resolveAvatarVariant } from './Avatar';
+import { Avatar, resolveAvatarImageUrl } from './Avatar';
 import { buildDirectionsUrl, getBrowserGps, searchRealPlaces } from '../services/geocoder';
 
 interface SocialMapPanelProps {
@@ -44,10 +44,10 @@ interface SocialMapPanelProps {
 type SheetSnap = 'peek' | 'half' | 'expanded';
 
 const BOUNDS = {
-  minLat: -6.274,
-  maxLat: -6.22,
-  minLng: 106.784,
-  maxLng: 106.828,
+  minLat: -6.272,
+  maxLat: -6.222,
+  minLng: 106.786,
+  maxLng: 106.826,
 };
 
 export const HANGOUT_CATEGORY_META: Record<
@@ -64,8 +64,8 @@ function projectToPercent(point: Coordinates): { x: number; y: number } {
   const x = ((point.lng - BOUNDS.minLng) / (BOUNDS.maxLng - BOUNDS.minLng)) * 100;
   const y = ((BOUNDS.maxLat - point.lat) / (BOUNDS.maxLat - BOUNDS.minLat)) * 100;
   return {
-    x: Math.max(8, Math.min(92, x)),
-    y: Math.max(14, Math.min(78, y)),
+    x: Math.max(14, Math.min(82, x)),
+    y: Math.max(22, Math.min(68, y)),
   };
 }
 
@@ -79,8 +79,8 @@ function unprojectPercent(xPct: number, yPct: number): Coordinates {
 }
 
 /**
- * Restyles OpenFreeMap Liberty vector layers into a rich deep-twilight navy/slate
- * night cartography (never flat monochrome black-gray) and ensures 3D buildings render.
+ * Restyles OpenFreeMap Liberty vector layers into a crisp, high-contrast deep twilight
+ * night cartography in Dark Mode, and warm subtle 3D buildings in Light Mode.
  */
 function applyCartographyStyleEnhancements(map: maplibregl.Map, theme: 'dark' | 'light') {
   const style = map.getStyle();
@@ -91,10 +91,10 @@ function applyCartographyStyleEnhancements(map: maplibregl.Map, theme: 'dark' | 
       const id = layer.id.toLowerCase();
       try {
         if (layer.type === 'background') {
-          map.setPaintProperty(layer.id, 'background-color', '#141B29');
+          map.setPaintProperty(layer.id, 'background-color', '#121826');
         } else if (layer.type === 'fill') {
           if (id.includes('water') || id.includes('river') || id.includes('ocean')) {
-            map.setPaintProperty(layer.id, 'fill-color', '#0D1626');
+            map.setPaintProperty(layer.id, 'fill-color', '#0B1322');
           } else if (
             id.includes('park') ||
             id.includes('grass') ||
@@ -103,46 +103,50 @@ function applyCartographyStyleEnhancements(map: maplibregl.Map, theme: 'dark' | 
             id.includes('green') ||
             id.includes('landcover')
           ) {
-            map.setPaintProperty(layer.id, 'fill-color', '#172B24');
+            map.setPaintProperty(layer.id, 'fill-color', '#152A23');
           } else if (id.includes('building')) {
-            map.setPaintProperty(layer.id, 'fill-color', '#212D40');
-            map.setPaintProperty(layer.id, 'fill-opacity', 0.85);
+            map.setPaintProperty(layer.id, 'fill-color', '#1E293B');
+            map.setPaintProperty(layer.id, 'fill-opacity', 0.88);
           } else if (id.includes('landuse') || id.includes('residential') || id.includes('urban')) {
-            map.setPaintProperty(layer.id, 'fill-color', '#1A2334');
+            map.setPaintProperty(layer.id, 'fill-color', '#161F30');
           }
         } else if (layer.type === 'fill-extrusion') {
-          map.setPaintProperty(layer.id, 'fill-extrusion-color', '#253348');
-          map.setPaintProperty(layer.id, 'fill-extrusion-opacity', 0.82);
+          map.setPaintProperty(layer.id, 'fill-extrusion-color', '#243247');
+          map.setPaintProperty(layer.id, 'fill-extrusion-opacity', 0.85);
         } else if (layer.type === 'line') {
           if (id.includes('water') || id.includes('river')) {
-            map.setPaintProperty(layer.id, 'line-color', '#0D1626');
+            map.setPaintProperty(layer.id, 'line-color', '#0B1322');
           } else if (
             id.includes('motorway') ||
             id.includes('trunk') ||
             id.includes('primary')
           ) {
-            map.setPaintProperty(layer.id, 'line-color', '#364966');
-          } else if (id.includes('road') || id.includes('street') || id.includes('highway') || id.includes('secondary')) {
-            map.setPaintProperty(layer.id, 'line-color', '#293548');
+            map.setPaintProperty(layer.id, 'line-color', '#3B5172');
+          } else if (
+            id.includes('road') ||
+            id.includes('street') ||
+            id.includes('highway') ||
+            id.includes('secondary')
+          ) {
+            map.setPaintProperty(layer.id, 'line-color', '#2A384F');
           } else if (id.includes('boundary') || id.includes('admin')) {
-            map.setPaintProperty(layer.id, 'line-color', 'rgba(148, 163, 184, 0.22)');
+            map.setPaintProperty(layer.id, 'line-color', 'rgba(148, 163, 184, 0.24)');
           }
         } else if (layer.type === 'symbol') {
-          map.setPaintProperty(layer.id, 'text-color', '#CBD5E1');
-          map.setPaintProperty(layer.id, 'text-halo-color', '#0F172A');
-          map.setPaintProperty(layer.id, 'text-halo-width', 1.4);
+          map.setPaintProperty(layer.id, 'text-color', '#DCE5F2');
+          map.setPaintProperty(layer.id, 'text-halo-color', '#0E1420');
+          map.setPaintProperty(layer.id, 'text-halo-width', 1.5);
         }
       } catch {
         // Ignore paint properties unsupported on specific vector layers
       }
     }
   } else {
-    // Boost 3D buildings warmly in Light Mode if present
     for (const layer of style.layers) {
       if (layer.type === 'fill-extrusion') {
         try {
-          map.setPaintProperty(layer.id, 'fill-extrusion-color', '#E8E3D9');
-          map.setPaintProperty(layer.id, 'fill-extrusion-opacity', 0.82);
+          map.setPaintProperty(layer.id, 'fill-extrusion-color', '#E7E1D7');
+          map.setPaintProperty(layer.id, 'fill-extrusion-opacity', 0.84);
         } catch {
           // Ignore
         }
@@ -248,25 +252,26 @@ export function SocialMapPanel({
     };
   }, [placeQuery, myLocation?.point]);
 
-  // MapLibre GL 3D Perspective Cartography (Liberty Light + Rich Twilight Night)
+  // MapLibre GL initialization: gentle pitch: 24, bearing: 0, zoom: 13.8 + ResizeObserver
   useEffect(() => {
     if (!useVectorMap || !mapHostRef.current) return;
 
+    const host = mapHostRef.current;
     const styleUrl =
       import.meta.env.VITE_MAP_STYLE_URL ||
       'https://tiles.openfreemap.org/styles/liberty';
 
-    const centerPoint = myLocation?.point ?? { lat: -6.249, lng: 106.807 };
+    const centerPoint = myLocation?.point ?? { lat: -6.247, lng: 106.807 };
     let map: maplibregl.Map;
 
     try {
       map = new maplibregl.Map({
-        container: mapHostRef.current,
+        container: host,
         style: styleUrl,
         center: [centerPoint.lng, centerPoint.lat],
-        zoom: 13.4,
-        pitch: 42,
-        bearing: -12,
+        zoom: 13.8,
+        pitch: 24,
+        bearing: 0,
         attributionControl: false,
       });
     } catch {
@@ -296,8 +301,14 @@ export function SocialMapPanel({
       );
     });
 
+    const ro = new ResizeObserver(() => {
+      map.resize();
+    });
+    ro.observe(host);
+
     mapRef.current = map;
     return () => {
+      ro.disconnect();
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map.remove();
@@ -305,7 +316,7 @@ export function SocialMapPanel({
     };
   }, [useVectorMap, theme]);
 
-  // Sync illustrated character pins, Gathering Halo, and categorized Hangout Pins on MapLibre
+  // Sync markers & fitBounds safely away from search bar, right FABs, and bottom sheet
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !useVectorMap) return;
@@ -313,7 +324,7 @@ export function SocialMapPanel({
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    // 1. Gathering Halo rings under active hangout hotspots (outer wrapper preserves MapLibre transform)
+    // 1. Centered Gathering Halo rings under active hangout hotspots
     hangoutPins.forEach((pin) => {
       if (!gatheringPinIds.has(pin.id)) return;
       const haloWrap = document.createElement('div');
@@ -327,7 +338,7 @@ export function SocialMapPanel({
       markersRef.current.push(haloMarker);
     });
 
-    // 2. Friend Markers with illustrated character SVG + 3px white frame + downward pointer tail
+    // 2. Friend Markers with crisp local editorial portraits + 3px white frame + downward pointer tail
     clusters.forEach((cluster) => {
       const el = document.createElement('div');
       el.className = 'social-pin-root';
@@ -339,7 +350,7 @@ export function SocialMapPanel({
         el.appendChild(badge);
         el.onclick = (e) => {
           e.stopPropagation();
-          map.flyTo({ center: [cluster.point.lng, cluster.point.lat], zoom: 15.2, pitch: 48 });
+          map.flyTo({ center: [cluster.point.lng, cluster.point.lat], zoom: 15, pitch: 24 });
         };
       } else {
         const entry = cluster.items[0];
@@ -351,15 +362,14 @@ export function SocialMapPanel({
 
         const pinHead = document.createElement('div');
         pinHead.className = 'social-pin-head';
-        if (entry.profile.avatarUrl) {
-          const img = document.createElement('img');
-          img.src = entry.profile.avatarUrl;
-          img.alt = entry.profile.displayName;
-          pinHead.appendChild(img);
-        } else {
-          const v = resolveAvatarVariant(entry.profile.avatarVariant, entry.userId);
-          pinHead.innerHTML = renderAvatarSvgMarkup(v);
-        }
+        const img = document.createElement('img');
+        img.src = resolveAvatarImageUrl(
+          entry.profile.avatarUrl,
+          entry.profile.avatarVariant,
+          entry.userId
+        );
+        img.alt = entry.profile.displayName;
+        pinHead.appendChild(img);
         el.appendChild(pinHead);
 
         const tail = document.createElement('div');
@@ -386,7 +396,7 @@ export function SocialMapPanel({
       markersRef.current.push(marker);
     });
 
-    // 3. Categorized Hangout Pins with crisp monochrome category icon
+    // 3. Categorized Hangout Pins with monochrome SVG icons
     const categoryIconSvg: Record<HangoutCategory, string> = {
       coffee:
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>',
@@ -414,11 +424,46 @@ export function SocialMapPanel({
         selectChannel(pin.channelId);
         onSelectHangoutChannel?.();
       };
-      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      const marker = new maplibregl.Marker({ element: el, anchor: 'top' })
         .setLngLat([pin.point.lng, pin.point.lat])
         .addTo(map);
       markersRef.current.push(marker);
     });
+
+    // Fit camera cleanly so no marker collides with top bar, right FABs, or bottom sheet
+    const fitAllMarkers = () => {
+      const allCoords: Coordinates[] = [
+        ...clusters.map((c) => c.point),
+        ...hangoutPins.map((p) => p.point),
+      ];
+      if (allCoords.length < 2) return;
+      const bounds = new maplibregl.LngLatBounds();
+      allCoords.forEach((pt) => bounds.extend([pt.lng, pt.lat]));
+      const width = mapHostRef.current?.clientWidth ?? 420;
+      const isNarrow = width < 560;
+      map.fitBounds(bounds, {
+        padding: isNarrow
+          ? { top: 200, bottom: 225, left: 72, right: 122 }
+          : { top: 135, bottom: 195, left: 96, right: 126 },
+        maxZoom: isNarrow ? 13.4 : 13.8,
+        pitch: 24,
+        bearing: 0,
+        duration: 0,
+      });
+    };
+
+    fitAllMarkers();
+    const ro = new ResizeObserver(() => {
+      map.resize();
+      fitAllMarkers();
+    });
+    if (mapHostRef.current) {
+      ro.observe(mapHostRef.current);
+    }
+
+    return () => {
+      ro.disconnect();
+    };
   }, [
     clusters,
     hangoutPins,
@@ -435,14 +480,15 @@ export function SocialMapPanel({
     try {
       const gps = await getBrowserGps();
       updateMyCoordinates(gps, 'Lokasi Saat Ini');
-      mapRef.current?.flyTo({ center: [gps.lng, gps.lat], zoom: 14.6, pitch: 44 });
+      mapRef.current?.flyTo({ center: [gps.lng, gps.lat], zoom: 14.4, pitch: 24, bearing: 0 });
       onNotify('Lokasi diperbarui dari GPS.');
     } catch {
       if (myLocation) {
         mapRef.current?.flyTo({
           center: [myLocation.point.lng, myLocation.point.lat],
-          zoom: 14,
-          pitch: 42,
+          zoom: 13.8,
+          pitch: 24,
+          bearing: 0,
         });
       }
       onNotify('Memusatkan peta ke posisi terakhir.');
@@ -493,96 +539,20 @@ export function SocialMapPanel({
       {useVectorMap ? (
         <div ref={mapHostRef} className="map-canvas-full" />
       ) : (
-        /* Rich Illustrated Zenly / Apple-Maps Offline Fallback */
         <div
           id="fallback-social-map"
           className="map-fallback-canvas"
           onClick={handleFallbackClick}
         >
-          <svg className="map-fallback-svg" viewBox="0 0 600 600" preserveAspectRatio="none">
-            <rect
-              width="600"
-              height="600"
-              fill={theme === 'dark' ? '#141B29' : '#F3EFE6'}
-            />
-            {/* Organic green parks */}
-            <path
-              d="M 290 60 C 350 40 430 65 445 125 C 455 165 395 190 340 175 C 285 160 250 95 290 60 Z"
-              fill={theme === 'dark' ? '#172B24' : '#CBE8C8'}
-            />
-            <path
-              d="M 75 310 C 145 290 220 320 225 385 C 230 440 155 465 95 440 C 45 415 35 335 75 310 Z"
-              fill={theme === 'dark' ? '#172B24' : '#D2EBCF'}
-            />
-            <path
-              d="M 420 420 C 480 400 560 430 570 495 C 580 545 500 570 445 545 C 400 520 385 445 420 420 Z"
-              fill={theme === 'dark' ? '#172B24' : '#CBE8C8'}
-            />
-            {/* Winding blue river */}
-            <path
-              d="M -20 495 C 120 455 210 380 315 295 C 405 225 495 155 620 120"
-              stroke={theme === 'dark' ? '#0D1626' : '#A8D5F2'}
-              strokeWidth="26"
-              strokeLinecap="round"
-              fill="none"
-            />
-            <path
-              d="M -20 495 C 120 455 210 380 315 295 C 405 225 495 155 620 120"
-              stroke={theme === 'dark' ? '#152540' : '#CBE7F8'}
-              strokeWidth="12"
-              strokeLinecap="round"
-              fill="none"
-            />
-            {/* Subtle urban building footprints */}
-            <g fill={theme === 'dark' ? '#1F2A3D' : '#E7E1D4'}>
-              <rect x="170" y="155" width="46" height="30" rx="6" />
-              <rect x="230" y="195" width="38" height="44" rx="6" />
-              <rect x="330" y="215" width="52" height="32" rx="6" />
-              <rect x="260" y="340" width="56" height="36" rx="6" />
-              <rect x="360" y="370" width="48" height="42" rx="6" />
-              <rect x="465" y="250" width="54" height="34" rx="6" />
-            </g>
-            {/* Secondary local streets */}
-            <g
-              stroke={theme === 'dark' ? '#243248' : '#FFFFFF'}
-              strokeWidth="4.5"
-              fill="none"
-              opacity="0.85"
-            >
-              <path d="M 30 220 Q 260 235 560 215" />
-              <path d="M 60 390 Q 290 365 570 430" />
-              <path d="M 245 20 Q 255 280 280 590" />
-              <path d="M 495 20 Q 470 290 520 590" />
-            </g>
-            {/* Major arterial avenues */}
-            <g
-              stroke={theme === 'dark' ? '#364966' : '#FFFDF9'}
-              strokeWidth="11"
-              strokeLinecap="round"
-              fill="none"
-            >
-              <path d="M -10 130 Q 230 155 610 92" />
-              <path d="M 140 -10 Q 178 290 252 610" />
-              <path d="M 412 -10 Q 382 280 462 610" />
-            </g>
-            <path
-              d="M -10 130 Q 230 155 610 92"
-              stroke={theme === 'dark' ? '#475D80' : '#FCD34D'}
-              strokeWidth="2.2"
-              fill="none"
-              opacity="0.7"
-            />
-          </svg>
-
-          <span className="map-area-label" style={{ left: '54%', top: '16%' }}>
-            SENOPATI · SCBD
-          </span>
-          <span className="map-area-label" style={{ left: '16%', top: '44%' }}>
-            BLOK M
-          </span>
-          <span className="map-area-label" style={{ left: '58%', top: '68%' }}>
-            KEMANG RAYA
-          </span>
+          <img
+            src={
+              theme === 'dark'
+                ? '/media/minimap-kemang-dark.webp'
+                : '/media/minimap-kemang-light.webp'
+            }
+            alt="Peta area Kemang dan Blok M"
+            className="map-fallback-img"
+          />
 
           {hangoutPins.map((pin) => {
             if (!gatheringPinIds.has(pin.id)) return null;
@@ -590,14 +560,16 @@ export function SocialMapPanel({
             return (
               <div
                 key={`halo-${pin.id}`}
-                className="gathering-halo-pulse"
                 style={{
                   position: 'absolute',
                   left: `${pos.x}%`,
                   top: `${pos.y}%`,
                   transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
                 }}
-              />
+              >
+                <div className="gathering-halo-pulse" />
+              </div>
             );
           })}
 
@@ -622,7 +594,6 @@ export function SocialMapPanel({
 
             const entry = cluster.items[0];
             const isSelected = selectedMapUserId === entry.userId;
-            const v = resolveAvatarVariant(entry.profile.avatarVariant, entry.userId);
             return (
               <div
                 key={entry.userId}
@@ -636,14 +607,14 @@ export function SocialMapPanel({
               >
                 {entry.loc.privacyMode === 'fuzzy' && <div className="map-fuzzy-halo" />}
                 <div className="social-pin-head">
-                  {entry.profile.avatarUrl ? (
-                    <img src={entry.profile.avatarUrl} alt={entry.profile.displayName} />
-                  ) : (
-                    <span
-                      className="avatar-svg-host"
-                      dangerouslySetInnerHTML={{ __html: renderAvatarSvgMarkup(v) }}
-                    />
-                  )}
+                  <img
+                    src={resolveAvatarImageUrl(
+                      entry.profile.avatarUrl,
+                      entry.profile.avatarVariant,
+                      entry.userId
+                    )}
+                    alt={entry.profile.displayName}
+                  />
                 </div>
                 <div className="social-pin-tail" />
                 <span className="map-marker-tag">
@@ -718,7 +689,8 @@ export function SocialMapPanel({
                     mapRef.current?.flyTo({
                       center: [place.point.lng, place.point.lat],
                       zoom: 15,
-                      pitch: 45,
+                      pitch: 24,
+                      bearing: 0,
                     });
                     onRequestPinAt(place.point, place.name);
                   }}
@@ -789,7 +761,7 @@ export function SocialMapPanel({
         </div>
       </div>
 
-      {/* Floating Bottom-Right Action Pills */}
+      {/* Floating Bottom-Right Action Pills (Cleanly spaced above bottom sheet) */}
       <div className="map-float-right">
         <button
           type="button"
@@ -818,7 +790,7 @@ export function SocialMapPanel({
         </button>
       </div>
 
-      {/* Draggable Bottom Sheet (Peek / Half / Expanded) */}
+      {/* Draggable Bottom Sheet */}
       <div className={`map-bottom-sheet ${sheetSnap}`}>
         <div
           className="sheet-grabber-hit"
@@ -856,7 +828,8 @@ export function SocialMapPanel({
                   mapRef.current?.flyTo({
                     center: [loc.point.lng, loc.point.lat],
                     zoom: 14.8,
-                    pitch: 45,
+                    pitch: 24,
+                    bearing: 0,
                   });
                 }}
               >

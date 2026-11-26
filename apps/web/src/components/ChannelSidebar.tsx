@@ -268,7 +268,7 @@ export function ChannelSidebar({
 
   return (
     <section className="channel-sidebar" aria-label="Daftar Obrolan">
-      {/* Circle Cover Banner (76px illustrated banner) OR Clean DM Header */}
+      {/* Circle Cover Banner (Photographic Cover Art + Smooth Dark Legibility Scrim) */}
       {activeCircle ? (
         <header
           className="circle-cover-banner"
@@ -276,19 +276,15 @@ export function ChannelSidebar({
             background: BANNER_GRADIENTS[activeCircle.bannerStyle ?? 'emerald'],
           }}
         >
-          <svg
-            className="circle-banner-art"
-            viewBox="0 0 280 84"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <circle cx="242" cy="14" r="46" fill="rgba(255,255,255,0.14)" />
-            <circle cx="204" cy="74" r="34" fill="rgba(255,255,255,0.09)" />
-            <path
-              d="M0 66 Q72 40 156 58 T280 42 L280 84 L0 84 Z"
-              fill="rgba(0,0,0,0.14)"
+          {activeCircle.bannerImage && (
+            <img
+              src={activeCircle.bannerImage}
+              alt=""
+              className="circle-banner-photo"
+              aria-hidden="true"
             />
-          </svg>
+          )}
+          <div className="circle-banner-scrim" aria-hidden="true" />
           <div className="circle-banner-content">
             <div style={{ minWidth: 0 }}>
               <h2 className="circle-banner-title">{activeCircle.name}</h2>
@@ -376,7 +372,7 @@ export function ChannelSidebar({
         </div>
       )}
 
-      {/* DM Mode: Quick Snap Stories Strip + Search & Filter */}
+      {/* DM Mode: Quick Snap Stories Strip (52px proportional avatars) + Search & Filter */}
       {!activeCircle && (
         <>
           {activeSnapStories.length > 0 && (
@@ -401,7 +397,7 @@ export function ChannelSidebar({
                           variant={author.avatarVariant}
                           seed={author.id}
                           avatarUrl={author.avatarUrl}
-                          size="md"
+                          size="story"
                         />
                       </span>
                     </span>

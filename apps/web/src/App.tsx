@@ -46,13 +46,11 @@ export function App() {
 
   const [fullMapMode, setFullMapMode] = useState(false);
   const [voiceStageOpen, setVoiceStageOpen] = useState(false);
-  const [splitMapOpen, setSplitMapOpen] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth > 1120 : true
-  );
+  const [splitMapOpen, setSplitMapOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>('chat');
   const [mobileChatView, setMobileChatView] = useState<'list' | 'thread'>('list');
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth <= 767 : false
+    typeof window !== 'undefined' ? window.innerWidth <= 899 : false
   );
   const [highlightedPinId, setHighlightedPinId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -62,7 +60,7 @@ export function App() {
   } | null>(null);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
+    const mq = window.matchMedia('(max-width: 899px)');
     const update = () => setIsMobileViewport(mq.matches);
     update();
     mq.addEventListener('change', update);
@@ -192,7 +190,7 @@ export function App() {
     }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#181A20' : '#F4F1EA');
+      meta.setAttribute('content', theme === 'dark' ? '#0F1117' : '#E8EBF0');
     }
   }, [theme]);
 
@@ -232,7 +230,7 @@ export function App() {
         ? '#4D3314'
         : isCoral
           ? '#522515'
-          : '#144A3E';
+          : '#134E4A';
 
     return {
       '--accent': accent,
@@ -247,15 +245,23 @@ export function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <AuthOnboarding cloudBackend={cloudBackend} onNotify={notify} />
+        <AuthOnboarding
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          cloudBackend={cloudBackend}
+          onNotify={notify}
+        />
         {toast && <div className="zona-toast">{toast}</div>}
       </>
     );
   }
 
-  const shellClass = fullMapMode
+  // Desktop-only full-screen map state must NEVER hide mobile tabs or blank out <900px viewports
+  const effectiveFullMap = !isMobileViewport && fullMapMode;
+
+  const shellClass = effectiveFullMap
     ? 'zona-shell full-map-mode'
-    : splitMapOpen
+    : splitMapOpen && !isMobileViewport
       ? 'zona-shell with-split-map'
       : 'zona-shell';
 
@@ -268,7 +274,9 @@ export function App() {
       data-mobile-view={mobileChatView}
     >
       <CircleRail
-        fullMapMode={fullMapMode}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        fullMapMode={effectiveFullMap}
         onToggleFullMap={() => {
           setFullMapMode((v) => !v);
           setVoiceStageOpen(false);
@@ -281,7 +289,7 @@ export function App() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      {!fullMapMode && (
+      {!effectiveFullMap && (
         <ChannelSidebar
           theme={theme}
           onToggleTheme={toggleTheme}
@@ -309,7 +317,7 @@ export function App() {
         />
       )}
 
-      {!fullMapMode &&
+      {!effectiveFullMap &&
         (voiceStageOpen && activeVoice ? (
           <VoiceStageView
             onCloseStage={() => setVoiceStageOpen(false)}
@@ -317,6 +325,7 @@ export function App() {
           />
         ) : (
           <ChatPanel
+            theme={theme}
             splitMapOpen={splitMapOpen}
             onToggleSplitMap={() => setSplitMapOpen((v) => !v)}
             onBackMobile={() => setMobileChatView('list')}
@@ -332,7 +341,7 @@ export function App() {
           />
         ))}
 
-      {(fullMapMode || splitMapOpen || mobileTab === 'map') && (
+      {(effectiveFullMap || (!isMobileViewport && splitMapOpen) || (isMobileViewport && mobileTab === 'map')) && (
         <SocialMapPanel
           theme={theme}
           onRequestPinAt={(coords, placeGuess) =>
@@ -340,7 +349,7 @@ export function App() {
           }
           highlightedPinId={highlightedPinId}
           onCloseDrawer={
-            !fullMapMode && !isMobileViewport ? () => setSplitMapOpen(false) : undefined
+            !effectiveFullMap && !isMobileViewport ? () => setSplitMapOpen(false) : undefined
           }
           onSelectHangoutChannel={() => {
             setFullMapMode(false);

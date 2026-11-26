@@ -43,6 +43,7 @@ import { VoiceNoteRecorder } from '../services/mediaTools';
 import { buildDirectionsUrl } from '../services/geocoder';
 
 interface ChatPanelProps {
+  theme: 'dark' | 'light';
   splitMapOpen: boolean;
   onToggleSplitMap: () => void;
   onBackMobile?: () => void;
@@ -74,6 +75,7 @@ function formatDuration(sec: number): string {
 }
 
 export function ChatPanel({
+  theme,
   splitMapOpen,
   onToggleSplitMap,
   onBackMobile,
@@ -422,12 +424,13 @@ export function ChatPanel({
           <button
             id="btn-split-map-toggle"
             type="button"
-            className={`icon-btn desktop-only ${splitMapOpen ? 'active' : ''}`}
+            className={`header-map-pill desktop-only ${splitMapOpen ? 'active' : ''}`}
             onClick={onToggleSplitMap}
             title={splitMapOpen ? 'Tutup panel peta' : 'Buka peta samping'}
             aria-label="Panel peta"
           >
-            <MapIcon size={18} strokeWidth={1.75} />
+            <MapIcon size={16} strokeWidth={1.75} />
+            <span>Peta</span>
           </button>
 
           <button
@@ -468,14 +471,15 @@ export function ChatPanel({
 
       {/* Textured Wallpaper Message Stream */}
       <div className="messages-scroll">
-        {groupedMessages.length === 0 && (
-          <div style={{ margin: 'auto', textAlign: 'center', padding: 24 }}>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>Belum ada pesan</p>
-            <p className="meta-text" style={{ marginTop: 4 }}>
-              Kirim pesan untuk memulai percakapan.
-            </p>
-          </div>
-        )}
+        <div className="messages-inner">
+          {groupedMessages.length === 0 && (
+            <div style={{ margin: 'auto', textAlign: 'center', padding: 24 }}>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>Belum ada pesan</p>
+              <p className="meta-text" style={{ marginTop: 4 }}>
+                Kirim pesan untuk memulai percakapan.
+              </p>
+            </div>
+          )}
 
         {groupedMessages.map((item) => {
           const {
@@ -773,7 +777,7 @@ export function ChatPanel({
                               ? 'Sudah dibuka'
                               : msg.snapViewOnce
                                 ? 'Sekali lihat'
-                                : '24 jam'}
+                                : '24j'}
                           </span>
                           <div className="snap-caption-bar">
                             {snapConsumed ? 'Foto sekali lihat telah berakhir' : msg.snapCaption}
@@ -802,7 +806,7 @@ export function ChatPanel({
 
                       return (
                         <div className="hangout-inline-card">
-                          {/* 110px Cartographic Mini-Map Preview */}
+                          {/* Real 3D Cartographic Mini-Map Preview */}
                           <div
                             className="hangout-minimap"
                             onClick={() => onFocusMapPin?.(pin.id)}
@@ -812,46 +816,16 @@ export function ChatPanel({
                               if (e.key === 'Enter') onFocusMapPin?.(pin.id);
                             }}
                           >
-                            <svg
-                              className="hangout-minimap-svg"
-                              viewBox="0 0 340 120"
-                              preserveAspectRatio="none"
-                              aria-hidden="true"
-                            >
-                              <rect width="340" height="120" className="mm-land" />
-                              <path
-                                d="M 18 14 C 65 4 115 24 112 62 C 110 92 48 106 20 82 Z"
-                                className="mm-park"
-                              />
-                              <path
-                                d="M 245 48 C 285 38 332 54 334 94 C 336 116 278 122 246 102 Z"
-                                className="mm-park"
-                              />
-                              <path
-                                d="M -10 105 C 95 90 195 36 350 18"
-                                className="mm-water"
-                                strokeWidth="14"
-                                fill="none"
-                              />
-                              <path
-                                d="M 0 36 Q 160 56 340 28"
-                                className="mm-road-major"
-                                strokeWidth="8"
-                                fill="none"
-                              />
-                              <path
-                                d="M 162 0 Q 174 60 196 120"
-                                className="mm-road-major"
-                                strokeWidth="7"
-                                fill="none"
-                              />
-                              <path
-                                d="M 0 86 Q 165 72 340 94"
-                                className="mm-road-minor"
-                                strokeWidth="4"
-                                fill="none"
-                              />
-                            </svg>
+                            <img
+                              src={
+                                theme === 'dark'
+                                  ? '/media/minimap-kemang-dark.webp'
+                                  : '/media/minimap-kemang-light.webp'
+                              }
+                              alt={`Peta lokasi ${pin.placeName}`}
+                              className="hangout-minimap-img"
+                            />
+                            <div className="hangout-minimap-scrim" aria-hidden="true" />
 
                             <span
                               className="minimap-cat-badge"
@@ -995,6 +969,7 @@ export function ChatPanel({
           );
         })}
         <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Info Drawer */}
@@ -1062,178 +1037,180 @@ export function ChatPanel({
 
       {/* Floating Liquid-Glass Composer Bar */}
       <div className="composer-shell">
-        {attachOpen && (
-          <div className="composer-popover">
-            <button
-              id="btn-attach-snap"
-              type="button"
-              className="context-menu-item"
-              onClick={() => {
-                setAttachOpen(false);
-                setSnapOpen(true);
-              }}
-            >
-              <Camera size={16} strokeWidth={1.75} />
-              <span>Quick Snap (24 jam)</span>
-            </button>
-            <button
-              id="btn-attach-hangout"
-              type="button"
-              className="context-menu-item"
-              onClick={() => {
-                setAttachOpen(false);
-                onOpenHangoutModal();
-              }}
-            >
-              <MapPin size={16} strokeWidth={1.75} />
-              <span>Pin Ajak Kumpul</span>
-            </button>
-          </div>
-        )}
-
-        {emojiOpen && (
-          <div className="emoji-popover">
-            {COMPOSER_EMOJIS.map((em) => (
+        <div className="composer-inner">
+          {attachOpen && (
+            <div className="composer-popover">
               <button
-                key={em}
+                id="btn-attach-snap"
                 type="button"
-                className="emoji-pick-btn"
+                className="context-menu-item"
                 onClick={() => {
-                  setDraft((d) => d + em);
-                  textareaRef.current?.focus();
-                }}
-              >
-                {em}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {(replyMessage || editingMessage) && (
-          <div className="composer-context-bar">
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {editingMessage ? (
-                <>
-                  <strong>Edit pesan</strong> · {editingMessage.content.slice(0, 60)}
-                </>
-              ) : (
-                <>
-                  Membalas <strong>{profiles[replyMessage!.senderId]?.displayName}</strong>:{' '}
-                  {replyMessage!.content.slice(0, 60)}
-                </>
-              )}
-            </span>
-            <button
-              type="button"
-              className="icon-btn"
-              style={{ width: 24, height: 24 }}
-              onClick={() => {
-                setReplyToMessage(null);
-                setEditingMessage(null);
-                if (editingMessage) setDraft('');
-              }}
-              aria-label="Batalkan"
-            >
-              <X size={14} strokeWidth={1.75} />
-            </button>
-          </div>
-        )}
-
-        <div className="composer-box">
-          {recordingSec !== null ? (
-            <>
-              <button
-                type="button"
-                className="icon-btn danger"
-                onClick={cancelVoiceRecording}
-                title="Batalkan rekaman"
-                aria-label="Batalkan rekaman"
-              >
-                <Trash2 size={18} strokeWidth={1.75} />
-              </button>
-              <div className="composer-recording-bar">
-                <span className="rec-dot" />
-                <span>Merekam suara · {formatDuration(recordingSec)}</span>
-              </div>
-              <button
-                id="btn-finish-voice-note"
-                type="button"
-                className="composer-send-btn"
-                onClick={finishVoiceRecording}
-                title="Kirim pesan suara"
-                aria-label="Kirim pesan suara"
-              >
-                <Send size={16} strokeWidth={1.75} />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                id="btn-composer-attach"
-                type="button"
-                className={`icon-btn ${attachOpen ? 'active' : ''}`}
-                onClick={() => {
-                  setAttachOpen((v) => !v);
-                  setEmojiOpen(false);
-                }}
-                title="Lampirkan"
-                aria-label="Lampirkan media atau pin kumpul"
-              >
-                <Plus size={19} strokeWidth={1.75} />
-              </button>
-
-              <textarea
-                ref={textareaRef}
-                id="chat-composer-input"
-                rows={1}
-                className="composer-textarea"
-                placeholder={`Tulis pesan ke ${activeChannel.name}`}
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  adjustTextareaHeight(e.target);
-                }}
-                onKeyDown={handleKeyDown}
-              />
-
-              <button
-                type="button"
-                className={`icon-btn ${emojiOpen ? 'active' : ''}`}
-                onClick={() => {
-                  setEmojiOpen((v) => !v);
                   setAttachOpen(false);
+                  setSnapOpen(true);
                 }}
-                title="Emoji"
-                aria-label="Pilih emoji"
               >
-                <Smile size={19} strokeWidth={1.75} />
+                <Camera size={16} strokeWidth={1.75} />
+                <span>Quick Snap (24 jam)</span>
               </button>
+              <button
+                id="btn-attach-hangout"
+                type="button"
+                className="context-menu-item"
+                onClick={() => {
+                  setAttachOpen(false);
+                  onOpenHangoutModal();
+                }}
+              >
+                <MapPin size={16} strokeWidth={1.75} />
+                <span>Pin Ajak Kumpul</span>
+              </button>
+            </div>
+          )}
 
-              {draft.trim().length > 0 ? (
+          {emojiOpen && (
+            <div className="emoji-popover">
+              {COMPOSER_EMOJIS.map((em) => (
                 <button
-                  id="btn-send-message"
+                  key={em}
+                  type="button"
+                  className="emoji-pick-btn"
+                  onClick={() => {
+                    setDraft((d) => d + em);
+                    textareaRef.current?.focus();
+                  }}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {(replyMessage || editingMessage) && (
+            <div className="composer-context-bar">
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {editingMessage ? (
+                  <>
+                    <strong>Edit pesan</strong> · {editingMessage.content.slice(0, 60)}
+                  </>
+                ) : (
+                  <>
+                    Membalas <strong>{profiles[replyMessage!.senderId]?.displayName}</strong>:{' '}
+                    {replyMessage!.content.slice(0, 60)}
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                className="icon-btn"
+                style={{ width: 24, height: 24 }}
+                onClick={() => {
+                  setReplyToMessage(null);
+                  setEditingMessage(null);
+                  if (editingMessage) setDraft('');
+                }}
+                aria-label="Batalkan"
+              >
+                <X size={14} strokeWidth={1.75} />
+              </button>
+            </div>
+          )}
+
+          <div className="composer-box">
+            {recordingSec !== null ? (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn danger"
+                  onClick={cancelVoiceRecording}
+                  title="Batalkan rekaman"
+                  aria-label="Batalkan rekaman"
+                >
+                  <Trash2 size={18} strokeWidth={1.75} />
+                </button>
+                <div className="composer-recording-bar">
+                  <span className="rec-dot" />
+                  <span>Merekam suara · {formatDuration(recordingSec)}</span>
+                </div>
+                <button
+                  id="btn-finish-voice-note"
                   type="button"
                   className="composer-send-btn"
-                  onClick={submitMessage}
-                  title="Kirim pesan"
-                  aria-label="Kirim pesan"
+                  onClick={finishVoiceRecording}
+                  title="Kirim pesan suara"
+                  aria-label="Kirim pesan suara"
                 >
                   <Send size={16} strokeWidth={1.75} />
                 </button>
-              ) : (
+              </>
+            ) : (
+              <>
                 <button
-                  id="btn-voice-note"
+                  id="btn-composer-attach"
                   type="button"
-                  className="icon-btn"
-                  onClick={startVoiceRecording}
-                  title="Rekam pesan suara"
-                  aria-label="Rekam pesan suara"
+                  className={`icon-btn ${attachOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setAttachOpen((v) => !v);
+                    setEmojiOpen(false);
+                  }}
+                  title="Lampirkan"
+                  aria-label="Lampirkan media atau pin kumpul"
                 >
-                  <Mic size={19} strokeWidth={1.75} />
+                  <Plus size={19} strokeWidth={1.75} />
                 </button>
-              )}
-            </>
-          )}
+
+                <textarea
+                  ref={textareaRef}
+                  id="chat-composer-input"
+                  rows={1}
+                  className="composer-textarea"
+                  placeholder={`Tulis pesan ke ${activeChannel.name}`}
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    adjustTextareaHeight(e.target);
+                  }}
+                  onKeyDown={handleKeyDown}
+                />
+
+                <button
+                  type="button"
+                  className={`icon-btn ${emojiOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setEmojiOpen((v) => !v);
+                    setAttachOpen(false);
+                  }}
+                  title="Emoji"
+                  aria-label="Pilih emoji"
+                >
+                  <Smile size={19} strokeWidth={1.75} />
+                </button>
+
+                {draft.trim().length > 0 ? (
+                  <button
+                    id="btn-send-message"
+                    type="button"
+                    className="composer-send-btn"
+                    onClick={submitMessage}
+                    title="Kirim pesan"
+                    aria-label="Kirim pesan"
+                  >
+                    <Send size={16} strokeWidth={1.75} />
+                  </button>
+                ) : (
+                  <button
+                    id="btn-voice-note"
+                    type="button"
+                    className="icon-btn"
+                    onClick={startVoiceRecording}
+                    title="Rekam pesan suara"
+                    aria-label="Rekam pesan suara"
+                  >
+                    <Mic size={19} strokeWidth={1.75} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 

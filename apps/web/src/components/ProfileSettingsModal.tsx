@@ -16,7 +16,7 @@ import {
   type PrivacyMode,
   type ZonaCloudBackend,
 } from '@zona/shared';
-import { AVATAR_VARIANT_COUNT, Avatar } from './Avatar';
+import { AVATAR_VARIANT_COUNT, Avatar, PRESET_AVATAR_URLS } from './Avatar';
 import { clearWorkspaceSnapshot } from '../services/offlineDb';
 import { compressImageFile } from '../services/mediaTools';
 
@@ -162,7 +162,7 @@ export function ProfileSettingsModal({
                   key={idx}
                   type="button"
                   onClick={() => {
-                    setAvatarUrl(undefined);
+                    setAvatarUrl(PRESET_AVATAR_URLS[idx]);
                     setAvatarVariant(idx);
                     setAvatarColor(COLORS[idx % COLORS.length]);
                   }}
@@ -170,7 +170,7 @@ export function ProfileSettingsModal({
                     borderRadius: 99,
                     padding: 1,
                     outline:
-                      !avatarUrl && avatarVariant === idx
+                      avatarUrl === PRESET_AVATAR_URLS[idx]
                         ? '2px solid var(--accent)'
                         : 'none',
                     outlineOffset: 1,
@@ -180,6 +180,7 @@ export function ProfileSettingsModal({
                     initials={me?.initials ?? 'RZ'}
                     color={COLORS[idx % COLORS.length]}
                     variant={idx}
+                    avatarUrl={PRESET_AVATAR_URLS[idx]}
                     size="xs"
                   />
                 </button>
