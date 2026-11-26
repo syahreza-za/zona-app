@@ -1,4 +1,4 @@
-import { Map, MessageCircle, Moon, Sun } from 'lucide-react';
+import { Map, MessageCircle, Moon, Plus, Settings, Sun } from 'lucide-react';
 import { useZonaStore } from '@zona/shared';
 
 interface CircleRailProps {
@@ -6,6 +6,8 @@ interface CircleRailProps {
   onToggleTheme: () => void;
   showMap: boolean;
   onToggleMap: () => void;
+  onOpenCircleModal: () => void;
+  onOpenSettings: () => void;
 }
 
 export function CircleRail({
@@ -13,6 +15,8 @@ export function CircleRail({
   onToggleTheme,
   showMap,
   onToggleMap,
+  onOpenCircleModal,
+  onOpenSettings,
 }: CircleRailProps) {
   const circles = useZonaStore((s) => s.circles);
   const channels = useZonaStore((s) => s.channels);
@@ -63,6 +67,16 @@ export function CircleRail({
         );
       })}
 
+      <button
+        id="rail-add-circle"
+        type="button"
+        className="rail-btn"
+        onClick={onOpenCircleModal}
+        title="Buat atau Gabung Circle lewat Kode Undangan"
+      >
+        <Plus size={19} />
+      </button>
+
       <div className="rail-spacer" />
 
       <button
@@ -83,6 +97,16 @@ export function CircleRail({
         title={theme === 'dark' ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
       >
         {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+
+      <button
+        id="rail-settings-btn"
+        type="button"
+        className="rail-btn"
+        onClick={onOpenSettings}
+        title="Profil, Keamanan & Pengaturan"
+      >
+        <Settings size={18} />
       </button>
     </aside>
   );

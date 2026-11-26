@@ -1,22 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Ban,
   Camera,
   CheckCheck,
+  Clock,
+  ExternalLink,
   Hash,
   MapPin,
   Mic,
+  Pause,
   Play,
   Reply,
+  Search,
   Send,
-  Sparkles,
   Square,
   X,
 } from 'lucide-react';
 import { useZonaStore, type Message, type RsvpStatus } from '@zona/shared';
+import { VoiceNoteRecorder } from '../services/mediaTools';
+import { buildDirectionsUrl } from '../services/geocoder';
+import { QuickSnapModal } from './QuickSnapModal';
 
 interface ChatPanelProps {
   onOpenHangoutModal: () => void;
   onFocusMapPin?: (pinId: string) => void;
+  onNotify: (msg: string) => void;
 }
 
 const QUICK_EMOJIS = ['🔥', '👍', '😂', '☕', '🎧'];
@@ -32,6 +40,7 @@ function formatTime(iso: string): string {
 export function ChatPanel({
   onOpenHangoutModal,
   onFocusMapPin,
+  onNotify,
 }: ChatPanelProps) {
   const {
     currentUserId,
@@ -39,32 +48,51 @@ export function ChatPanel({
     channels,
     messages,
     hangoutPins,
+    blockedUserIds,
+    typingUsersByChannel,
     activeChannelId,
     replyToMessageId,
+    searchQuery,
     sendTextMessage,
     sendVoiceNote,
     sendQuickSnap,
     toggleReaction,
     setReplyToMessage,
+    setSearchQuery,
     markSnapViewed,
     respondToHangout,
+    blockUser,
   } = useZonaStore();
 
   const [draft, setDraft] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [recordingSec, setRecordingSec] = useState<number | null>(null);
+  const [liveMicLevel, setLiveMicLevel] = useState(8);
+  const [realMicActive, setRealMicActive] = useState(false);
   const [snapOpen, setSnapOpen] = useState(false);
-  const [snapCaption, setSnapCaption] = useState('');
-  const [snapViewOnce, setSnapViewOnce] = useState(false);
   const [viewingSnap, setViewingSnap] = useState<Message | null>(null);
   const [playingVnId, setPlayingVnId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const recorderRef = useRef<VoiceNoteRecorder | null>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   const activeChannel = channels.find((c) => c.id === activeChannelId);
-  const channelMessages = messages.filter((m) => m.channelId === activeChannelId);
+  const rawMessages = messages.filter(
+    (m) => m.channelId === activeChannelId && !blockedUserIds.includes(m.senderId)
+  );
+  const channelMessages = searchQuery.trim()
+    ? rawMessages.filter((m) =>
+        `${m.content} ${m.snapCaption ?? ''}`
+          .toLowerCase()
+          .includes(searchQuery.trim().toLowerCase())
+      )
+    : rawMessages;
+
   const replyMessage = replyToMessageId
-    ? channelMessages.find((m) => m.id === replyToMessageId)
+    ? rawMessages.find((m) => m.id === replyToMessageId)
     : null;
+  const typingUsers = typingUsersByChannel[activeChannelId] ?? [];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,6 +106,13 @@ export function ChatPanel({
     return () => window.clearInterval(timer);
   }, [recordingSec !== null]);
 
+  useEffect(() => {
+    return () => {
+      recorderRef.current?.cancel();
+      audioPlayerRef.current?.pause();
+    };
+  }, []);
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChannel || !draft.trim()) return;
@@ -85,23 +120,71 @@ export function ChatPanel({
     setDraft('');
   };
 
-  const handleToggleVoiceNote = () => {
+  const handleToggleVoiceNote = async () => {
     if (!activeChannel) return;
+
     if (recordingSec === null) {
-      setRecordingSec(1);
+      const recorder = new VoiceNoteRecorder();
+      recorderRef.current = recorder;
+      try {
+        await recorder.start((lvl) => setLiveMicLevel(lvl));
+        setRealMicActive(true);
+        setRecordingSec(1);
+      } catch {
+        setRealMicActive(false);
+        setRecordingSec(1);
+        onNotify('Izin mikrofon tidak tersedia — beralih ke simulasi Voice Note.');
+      }
+      return;
+    }
+
+    if (realMicActive && recorderRef.current) {
+      try {
+        const recorded = await recorderRef.current.stop();
+        sendVoiceNote(
+          activeChannel.id,
+          recorded.durationSec,
+          recorded.dataUrl,
+          recorded.waveformPeaks
+        );
+        onNotify(`Voice Note asli (${recorded.durationSec}s) terkirim!`);
+      } catch {
+        sendVoiceNote(activeChannel.id, recordingSec);
+      }
     } else {
       sendVoiceNote(activeChannel.id, recordingSec);
-      setRecordingSec(null);
     }
+
+    recorderRef.current = null;
+    setRealMicActive(false);
+    setRecordingSec(null);
   };
 
-  const handleSendSnap = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeChannel) return;
-    sendQuickSnap(activeChannel.id, snapCaption, snapViewOnce);
-    setSnapCaption('');
-    setSnapViewOnce(false);
-    setSnapOpen(false);
+  const handlePlayVoiceNote = (msg: Message) => {
+    if (playingVnId === msg.id) {
+      audioPlayerRef.current?.pause();
+      setPlayingVnId(null);
+      return;
+    }
+
+    audioPlayerRef.current?.pause();
+
+    if (msg.audioUrl) {
+      const audio = new Audio(msg.audioUrl);
+      audioPlayerRef.current = audio;
+      setPlayingVnId(msg.id);
+      audio.onended = () => setPlayingVnId(null);
+      audio.onerror = () => setPlayingVnId(null);
+      audio.play().catch(() => {
+        setPlayingVnId(null);
+        onNotify('Gagal memutar audio di browser ini.');
+      });
+    } else {
+      setPlayingVnId(msg.id);
+      window.setTimeout(() => {
+        setPlayingVnId((cur) => (cur === msg.id ? null : cur));
+      }, Math.min(4000, (msg.voiceDurationSec ?? 4) * 1000));
+    }
   };
 
   const handleOpenSnap = (msg: Message) => {
@@ -125,18 +208,31 @@ export function ChatPanel({
           <div style={{ minWidth: 0 }}>
             <h1 className="chat-header-title">{activeChannel.name}</h1>
             <p className="chat-header-topic">
-              {activeChannel.topic ?? 'Offline-first · Sinkron otomatis'}
+              {typingUsers.length > 0
+                ? `${typingUsers.join(', ')} sedang mengetik...`
+                : activeChannel.topic ?? 'Offline-first · Sinkron otomatis'}
             </p>
           </div>
         </div>
 
         <div className="chat-header-actions">
           <button
+            type="button"
+            className={`icon-btn ${searchOpen ? 'active' : ''}`}
+            onClick={() => {
+              setSearchOpen((v) => !v);
+              if (searchOpen) setSearchQuery('');
+            }}
+            title="Cari pesan di kanal ini"
+          >
+            <Search size={16} />
+          </button>
+          <button
             id="btn-chat-quick-snap"
             type="button"
             className="pill-action"
             onClick={() => setSnapOpen(true)}
-            title="Kirim Quick Snap (24 jam)"
+            title="Ambil foto atau pilih Quick Snap (24 jam)"
           >
             <Camera size={14} />
             <span>Snap</span>
@@ -153,18 +249,52 @@ export function ChatPanel({
         </div>
       </header>
 
+      {searchOpen && (
+        <div className="search-bar-strip">
+          <Search size={14} color="var(--text-muted)" />
+          <input
+            className="search-inline-input"
+            placeholder="Cari teks atau caption Snap di kanal ini..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            autoFocus
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="icon-btn"
+              style={{ width: 24, height: 24 }}
+              onClick={() => setSearchQuery('')}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="messages-scroll">
+        {channelMessages.length === 0 && (
+          <div className="empty-chat-state">
+            <strong>Belum ada pesan yang cocok</strong>
+            <span className="channel-meta">
+              Mulai obrolan, kirim Voice Note asli, atau ambil Quick Snap.
+            </span>
+          </div>
+        )}
+
         {channelMessages.map((msg) => {
           const sender = profiles[msg.senderId];
           const isMine = msg.senderId === currentUserId;
           const quoted = msg.replyToId
-            ? channelMessages.find((m) => m.id === msg.replyToId)
+            ? rawMessages.find((m) => m.id === msg.replyToId)
             : null;
           const pin = msg.hangoutPinId
             ? hangoutPins.find((p) => p.id === msg.hangoutPinId)
             : null;
           const snapConsumed =
             msg.snapViewOnce && msg.snapViewedBy?.includes(currentUserId);
+          const peaks =
+            msg.waveformPeaks ?? [9, 16, 12, 22, 18, 10, 20, 15, 23, 13, 17, 11];
 
           return (
             <article key={msg.id} className={`msg-row ${isMine ? 'mine' : ''}`}>
@@ -181,9 +311,12 @@ export function ChatPanel({
                 <div className="msg-sender">
                   <span>{sender?.displayName ?? 'Anggota'}</span>
                   <span className="msg-time">{formatTime(msg.createdAt)}</span>
-                  {isMine && (
-                    <CheckCheck size={13} color="var(--accent-emerald)" />
-                  )}
+                  {isMine &&
+                    (msg.status === 'sending' ? (
+                      <Clock size={12} color="var(--text-muted)" />
+                    ) : (
+                      <CheckCheck size={13} color="var(--accent-emerald)" />
+                    ))}
                 </div>
 
                 {quoted && (
@@ -200,33 +333,27 @@ export function ChatPanel({
                     <button
                       type="button"
                       className="vn-play-btn"
-                      onClick={() =>
-                        setPlayingVnId((id) => (id === msg.id ? null : msg.id))
-                      }
+                      onClick={() => handlePlayVoiceNote(msg)}
                       aria-label="Putar Voice Note"
                     >
                       {playingVnId === msg.id ? (
-                        <Square size={12} fill="currentColor" />
+                        <Pause size={13} fill="currentColor" />
                       ) : (
                         <Play size={13} fill="currentColor" />
                       )}
                     </button>
                     <div className="vn-bars">
-                      {[9, 16, 12, 22, 18, 10, 20, 15, 23, 13, 17, 11].map(
-                        (h, idx) => (
-                          <span
-                            key={idx}
-                            className={`vn-bar ${
-                              playingVnId === msg.id && idx % 2 === 0
-                                ? 'active'
-                                : ''
-                            }`}
-                            style={{ height: `${h}px` }}
-                          />
-                        )
-                      )}
+                      {peaks.map((h, idx) => (
+                        <span
+                          key={idx}
+                          className={`vn-bar ${playingVnId === msg.id ? 'active' : ''}`}
+                          style={{ height: `${h}px` }}
+                        />
+                      ))}
                     </div>
-                    <span className="msg-time">{msg.voiceDurationSec ?? 8}s</span>
+                    <span className="msg-time">
+                      {msg.voiceDurationSec ?? 8}s{msg.audioUrl ? ' · HD' : ''}
+                    </span>
                   </div>
                 )}
 
@@ -236,19 +363,44 @@ export function ChatPanel({
                     style={{
                       background: snapConsumed
                         ? 'var(--bg-elevated)'
-                        : msg.snapGradient,
+                        : msg.mediaUrl
+                          ? '#0d0f13'
+                          : msg.snapGradient,
                       opacity: snapConsumed ? 0.6 : 1,
+                      position: 'relative',
+                      overflow: 'hidden',
                     }}
                     onClick={() => handleOpenSnap(msg)}
                   >
-                    <span className="snap-badge">
+                    {!snapConsumed && msg.mediaUrl && (
+                      <img
+                        src={msg.mediaUrl}
+                        alt={msg.snapCaption ?? 'Quick Snap'}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                        }}
+                      />
+                    )}
+                    <span className="snap-badge" style={{ position: 'relative', zIndex: 2 }}>
                       {snapConsumed
                         ? 'Sudah dibuka (View Once)'
                         : msg.snapViewOnce
                           ? 'Quick Snap · Sekali Lihat'
                           : 'Quick Snap · 24 Jam'}
                     </span>
-                    <div>
+                    <div
+                      style={{
+                        position: 'relative',
+                        zIndex: 2,
+                        background: msg.mediaUrl ? 'rgba(0,0,0,0.52)' : 'transparent',
+                        padding: msg.mediaUrl ? '6px 8px' : 0,
+                        borderRadius: 10,
+                      }}
+                    >
                       <strong style={{ display: 'block', fontSize: 13 }}>
                         {snapConsumed ? 'Snap berakhir' : msg.snapCaption}
                       </strong>
@@ -270,13 +422,25 @@ export function ChatPanel({
                           📍 {pin.placeName} · {pin.startsAtLabel}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        className="pill-action"
-                        onClick={() => onFocusMapPin?.(pin.id)}
-                      >
-                        Lihat Peta
-                      </button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          type="button"
+                          className="pill-action"
+                          onClick={() => onFocusMapPin?.(pin.id)}
+                        >
+                          Peta
+                        </button>
+                        <a
+                          href={buildDirectionsUrl(pin.point, pin.placeName)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="pill-action"
+                          style={{ textDecoration: 'none' }}
+                          title="Buka rute di Google Maps"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
                     </div>
 
                     <div className="rsvp-row">
@@ -355,6 +519,20 @@ export function ChatPanel({
                   >
                     <Reply size={12} />
                   </button>
+
+                  {!isMine && (
+                    <button
+                      type="button"
+                      className="quick-act-btn"
+                      onClick={() => {
+                        blockUser(msg.senderId);
+                        onNotify(`${sender?.displayName ?? 'Pengguna'} diblokir. Kamu bisa membuka blokir di Pengaturan.`);
+                      }}
+                      title="Blokir pengguna (Keamanan)"
+                    >
+                      <Ban size={11} />
+                    </button>
+                  )}
                 </div>
               </div>
             </article>
@@ -386,7 +564,7 @@ export function ChatPanel({
             type="button"
             className="icon-btn"
             onClick={() => setSnapOpen(true)}
-            title="Kirim Quick Snap"
+            title="Buka Kamera / Upload Quick Snap"
           >
             <Camera size={19} />
           </button>
@@ -396,7 +574,9 @@ export function ChatPanel({
             className="composer-input"
             placeholder={
               recordingSec !== null
-                ? `Merekam Voice Note... 0:${String(recordingSec).padStart(2, '0')}`
+                ? `Merekam ${realMicActive ? 'Audio Asli' : 'Voice Note'}... 0:${String(
+                    recordingSec
+                  ).padStart(2, '0')} (level ${liveMicLevel})`
                 : `Kirim pesan ke ${activeChannel.name}...`
             }
             value={draft}
@@ -412,7 +592,7 @@ export function ChatPanel({
             title={
               recordingSec !== null
                 ? 'Hentikan & Kirim Voice Note'
-                : 'Rekam Voice Note Cepat'
+                : 'Rekam Voice Note Mikrofon Asli'
             }
           >
             {recordingSec !== null ? (
@@ -429,75 +609,47 @@ export function ChatPanel({
         </div>
       </form>
 
-      {/* Quick Snap Composer Modal */}
       {snapOpen && (
-        <div className="modal-backdrop" onClick={() => setSnapOpen(false)}>
-          <form
-            className="modal-sheet"
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={handleSendSnap}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} color="var(--accent-yellow)" />
-              <h3>Kirim Quick Snap</h3>
-            </div>
-            <label className="field-label">
-              Caption Momen
-              <input
-                className="field-input"
-                placeholder="Mis: Kopi susu udah nyampe, buruan!"
-                value={snapCaption}
-                onChange={(e) => setSnapCaption(e.target.value)}
-                autoFocus
-              />
-            </label>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 13,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={snapViewOnce}
-                onChange={(e) => setSnapViewOnce(e.target.checked)}
-              />
-              Aktifkan mode Sekali Lihat (View Once)
-            </label>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="pill-action"
-                onClick={() => setSnapOpen(false)}
-              >
-                Batal
-              </button>
-              <button type="submit" className="pill-action primary">
-                Kirim Snap
-              </button>
-            </div>
-          </form>
-        </div>
+        <QuickSnapModal
+          onClose={() => setSnapOpen(false)}
+          onSend={({ caption, viewOnce, mediaUrl }) => {
+            sendQuickSnap(activeChannel.id, caption, viewOnce, mediaUrl);
+            onNotify(mediaUrl ? 'Foto Quick Snap terkirim!' : 'Quick Snap terkirim!');
+          }}
+        />
       )}
 
-      {/* Quick Snap Lightbox Viewer */}
       {viewingSnap && (
         <div className="modal-backdrop" onClick={() => setViewingSnap(null)}>
           <div
             className="modal-sheet"
             style={{
-              background: viewingSnap.snapGradient,
+              background: viewingSnap.mediaUrl ? '#0d0f13' : viewingSnap.snapGradient,
               color: '#fff',
-              minHeight: 340,
+              minHeight: 380,
               justifyContent: 'space-between',
+              position: 'relative',
+              overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="map-header-row">
-              <strong>{profiles[viewingSnap.senderId]?.displayName}</strong>
+            {viewingSnap.mediaUrl && (
+              <img
+                src={viewingSnap.mediaUrl}
+                alt={viewingSnap.snapCaption ?? 'Quick Snap'}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+            )}
+            <div className="map-header-row" style={{ position: 'relative', zIndex: 2 }}>
+              <strong style={{ background: 'rgba(0,0,0,0.45)', padding: '4px 10px', borderRadius: 999 }}>
+                {profiles[viewingSnap.senderId]?.displayName}
+              </strong>
               <button
                 type="button"
                 className="pill-action"
@@ -506,12 +658,22 @@ export function ChatPanel({
                 Tutup
               </button>
             </div>
-            <div>
-              <h3 style={{ fontSize: 22, marginBottom: 6 }}>
+            <div
+              style={{
+                position: 'relative',
+                zIndex: 2,
+                background: 'rgba(0,0,0,0.55)',
+                padding: '10px 12px',
+                borderRadius: 12,
+              }}
+            >
+              <h3 style={{ fontSize: 18, marginBottom: 4 }}>
                 {viewingSnap.snapCaption}
               </h3>
-              <p style={{ margin: 0, opacity: 0.9, fontSize: 13 }}>
-                {viewingSnap.content}
+              <p style={{ margin: 0, opacity: 0.9, fontSize: 12 }}>
+                {viewingSnap.snapViewOnce
+                  ? 'Mode Sekali Lihat — Snap akan terkunci setelah ditutup.'
+                  : 'Otomatis kedaluwarsa dalam 24 jam.'}
               </p>
             </div>
           </div>

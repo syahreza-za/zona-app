@@ -38,7 +38,34 @@ describe('ZONA Fuzzy Location Privacy & Distance Math', () => {
   });
 });
 
-describe('ZONA Core Store (WA Chat × Discord Voice × Snap Map Bridge)', () => {
+describe('ZONA Production Store (Offline Outbox, Circles, Safety & Bridge)', () => {
+  it('queues messages while offline and flushes to sent when back online', () => {
+    const store = useZonaStore.getState();
+    store.setOnlineStatus(false);
+
+    const msg = store.sendTextMessage('ch-kampus-umum', 'Pesan saat offline');
+    expect(msg.status).toBe('sending');
+    expect(useZonaStore.getState().outbox.some((o) => o.messageId === msg.id)).toBe(true);
+
+    store.setOnlineStatus(true);
+    const updated = useZonaStore.getState().messages.find((m) => m.id === msg.id);
+    expect(updated?.status).toBe('sent');
+    expect(useZonaStore.getState().outbox.length).toBe(0);
+  });
+
+  it('creates a Circle with invite code and allows joining by invite code', () => {
+    const store = useZonaStore.getState();
+    const circle = store.createCircle('Komunitas Lari Pagi', 'LP');
+    expect(circle.inviteCode.startsWith('ZONA-')).toBe(true);
+
+    const res = store.joinCircleByCode(circle.inviteCode);
+    expect(res.ok).toBe(true);
+    expect(res.circle?.id).toBe(circle.id);
+
+    const bad = store.joinCircleByCode('INVALID');
+    expect(bad.ok).toBe(false);
+  });
+
   it('creates a Hangout Pin and auto-spawns a dedicated ephemeral channel + RSVP card', () => {
     const store = useZonaStore.getState();
     const prevChannelCount = store.channels.length;
@@ -63,6 +90,14 @@ describe('ZONA Core Store (WA Chat × Discord Voice × Snap Map Bridge)', () => 
       (m) => m.channelId === channel.id && m.type === 'hangout_card'
     );
     expect(cardMsg).toBeDefined();
+  });
+
+  it('supports blocking and unblocking users for Store safety compliance', () => {
+    const store = useZonaStore.getState();
+    store.blockUser('u-tara');
+    expect(useZonaStore.getState().blockedUserIds).toContain('u-tara');
+    store.unblockUser('u-tara');
+    expect(useZonaStore.getState().blockedUserIds).not.toContain('u-tara');
   });
 
   it('joins and leaves Voice Lounge cleanly without duplicating participants', () => {

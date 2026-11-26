@@ -11,11 +11,13 @@ import {
 } from '../demo/seedData';
 import { estimateEtaMinutes } from '../map/fuzzyLocation';
 import type {
+  BackendMode,
   Channel,
   Circle,
   Coordinates,
   HangoutPin,
   Message,
+  OutboxRecord,
   PrivacyMode,
   Profile,
   RsvpStatus,
@@ -24,6 +26,9 @@ import type {
 } from '../types';
 
 export interface ZonaState {
+  isAuthenticated: boolean;
+  backendMode: BackendMode;
+  isOnline: boolean;
   currentUserId: string;
   isDemoMode: boolean;
   profiles: Record<string, Profile>;
@@ -33,33 +38,63 @@ export interface ZonaState {
   locations: Record<string, UserLocation>;
   hangoutPins: HangoutPin[];
   voiceLounges: VoiceLounge[];
+  blockedUserIds: string[];
+  outbox: OutboxRecord[];
+  typingUsersByChannel: Record<string, string[]>;
 
   // Active UI selection
-  activeCircleId: string | null; // null = Direct Messages view
+  activeCircleId: string | null;
   activeChannelId: string;
   activeVoiceLoungeId: string | null;
   isMuted: boolean;
   isDeafened: boolean;
   replyToMessageId: string | null;
   selectedMapUserId: string | null;
+  searchQuery: string;
 
-  // Actions
+  // Auth & Profile Actions
+  completeOnboarding: (input: {
+    displayName: string;
+    username: string;
+    avatarColor: string;
+    statusEmoji: string;
+    statusText: string;
+    mode: BackendMode;
+    userId?: string;
+  }) => void;
+  updateMyProfile: (patch: Partial<Pick<Profile, 'displayName' | 'username' | 'avatarColor' | 'statusEmoji' | 'statusText'>>) => void;
+  signOutSession: () => void;
+  setOnlineStatus: (online: boolean) => void;
+  flushOutbox: () => number;
+
+  // Navigation & UI
   selectCircle: (circleId: string | null) => void;
   selectChannel: (channelId: string) => void;
   setReplyToMessage: (messageId: string | null) => void;
   setSelectedMapUser: (userId: string | null) => void;
+  setSearchQuery: (q: string) => void;
+  setTypingUsers: (channelId: string, names: string[]) => void;
 
+  // Messaging (Offline-First + Real Media)
   sendTextMessage: (channelId: string, content: string) => Message;
-  sendVoiceNote: (channelId: string, durationSec: number) => Message;
+  sendVoiceNote: (
+    channelId: string,
+    durationSec: number,
+    audioUrl?: string,
+    waveformPeaks?: number[]
+  ) => Message;
   sendQuickSnap: (
     channelId: string,
     caption: string,
-    viewOnce?: boolean
+    viewOnce?: boolean,
+    mediaUrl?: string
   ) => Message;
   toggleReaction: (messageId: string, emoji: string) => void;
   markSnapViewed: (messageId: string) => void;
 
   // Discord-like Circles & Voice Lounge
+  createCircle: (name: string, shortCode?: string) => Circle;
+  joinCircleByCode: (inviteCode: string) => { ok: boolean; circle?: Circle; error?: string };
   createChannel: (circleId: string, name: string, topic?: string) => Channel;
   joinVoiceLounge: (loungeId: string) => void;
   leaveVoiceLounge: () => void;
@@ -69,6 +104,7 @@ export interface ZonaState {
   // Snapchat-like Map & Magic Bridge ("Ajak Kumpul")
   setMyPrivacyMode: (mode: PrivacyMode) => void;
   updateMyActivity: (emoji: string, text: string) => void;
+  updateMyCoordinates: (point: Coordinates, areaLabel?: string) => void;
   createHangoutPin: (input: {
     circleId: string;
     title: string;
@@ -77,13 +113,40 @@ export interface ZonaState {
     point: Coordinates;
   }) => { pin: HangoutPin; channel: Channel };
   respondToHangout: (pinId: string, status: RsvpStatus) => void;
-  hydrateSnapshot: (snapshot: Partial<Pick<ZonaState, 'channels' | 'messages' | 'hangoutPins' | 'locations'>>) => void;
+
+  // Store Compliance (Block & Report)
+  blockUser: (userId: string) => void;
+  unblockUser: (userId: string) => void;
+
+  hydrateSnapshot: (
+    snapshot: Partial<
+      Pick<
+        ZonaState,
+        | 'isAuthenticated'
+        | 'profiles'
+        | 'circles'
+        | 'channels'
+        | 'messages'
+        | 'hangoutPins'
+        | 'locations'
+        | 'blockedUserIds'
+        | 'outbox'
+      >
+    >
+  ) => void;
 }
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 6)}`;
+}
+
+function makeInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'ZN';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 function slugifyChannelName(input: string): string {
@@ -104,6 +167,9 @@ const SNAP_GRADIENTS = [
 ];
 
 export const useZonaStore = create<ZonaState>((set, get) => ({
+  isAuthenticated: false,
+  backendMode: 'demo',
+  isOnline: true,
   currentUserId: CURRENT_USER_ID,
   isDemoMode: true,
   profiles: DEMO_PROFILES,
@@ -113,6 +179,9 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
   locations: DEMO_LOCATIONS,
   hangoutPins: DEMO_HANGOUT_PINS,
   voiceLounges: DEMO_VOICE_LOUNGES,
+  blockedUserIds: [],
+  outbox: [],
+  typingUsersByChannel: {},
 
   activeCircleId: 'c-kampus',
   activeChannelId: 'ch-kampus-ngopi',
@@ -121,6 +190,119 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
   isDeafened: false,
   replyToMessageId: null,
   selectedMapUserId: null,
+  searchQuery: '',
+
+  completeOnboarding: ({
+    displayName,
+    username,
+    avatarColor,
+    statusEmoji,
+    statusText,
+    mode,
+    userId,
+  }) => {
+    const uid = userId || get().currentUserId;
+    const cleanName = displayName.trim() || 'Reza';
+    const cleanUser =
+      username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'syahreza';
+
+    set((state) => {
+      const existingLoc = state.locations[uid] ?? state.locations[CURRENT_USER_ID];
+      return {
+        isAuthenticated: true,
+        backendMode: mode,
+        isDemoMode: mode === 'demo',
+        currentUserId: uid,
+        profiles: {
+          ...state.profiles,
+          [uid]: {
+            id: uid,
+            username: cleanUser,
+            displayName: cleanName,
+            initials: makeInitials(cleanName),
+            avatarColor,
+            statusEmoji,
+            statusText,
+            isOnline: true,
+            lastSeenAt: new Date().toISOString(),
+          },
+        },
+        locations: {
+          ...state.locations,
+          [uid]: {
+            ...(existingLoc ?? {
+              userId: uid,
+              point: { lat: -6.2442, lng: 106.8006 },
+              privacyMode: 'exact' as PrivacyMode,
+              areaLabel: 'Blok M, Jaksel',
+              batteryPct: 86,
+              isMoving: false,
+            }),
+            userId: uid,
+            activityEmoji: statusEmoji,
+            activityText: statusText,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    });
+  },
+
+  updateMyProfile: (patch) => {
+    const { currentUserId, profiles, locations } = get();
+    const cur = profiles[currentUserId];
+    if (!cur) return;
+    const nextName = patch.displayName?.trim() || cur.displayName;
+    const nextProfile: Profile = {
+      ...cur,
+      ...patch,
+      displayName: nextName,
+      initials: makeInitials(nextName),
+    };
+    const curLoc = locations[currentUserId];
+    set({
+      profiles: { ...profiles, [currentUserId]: nextProfile },
+      locations: curLoc
+        ? {
+            ...locations,
+            [currentUserId]: {
+              ...curLoc,
+              activityEmoji: nextProfile.statusEmoji,
+              activityText: nextProfile.statusText,
+            },
+          }
+        : locations,
+    });
+  },
+
+  signOutSession: () => {
+    set({
+      isAuthenticated: false,
+      activeVoiceLoungeId: null,
+      replyToMessageId: null,
+      searchQuery: '',
+    });
+  },
+
+  setOnlineStatus: (online) => {
+    set({ isOnline: online });
+    if (online) {
+      get().flushOutbox();
+    }
+  },
+
+  flushOutbox: () => {
+    const { outbox, messages } = get();
+    if (outbox.length === 0) return 0;
+    const pendingIds = new Set(outbox.map((o) => o.messageId));
+    set({
+      outbox: [],
+      messages: messages.map((m) =>
+        pendingIds.has(m.id) ? { ...m, status: 'sent' } : m
+      ),
+    });
+    return outbox.length;
+  },
 
   selectCircle: (circleId) => {
     const state = get();
@@ -154,67 +336,100 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
 
   setSelectedMapUser: (userId) => set({ selectedMapUserId: userId }),
 
+  setSearchQuery: (q) => set({ searchQuery: q }),
+
+  setTypingUsers: (channelId, names) =>
+    set((state) => ({
+      typingUsersByChannel: {
+        ...state.typingUsersByChannel,
+        [channelId]: names,
+      },
+    })),
+
   sendTextMessage: (channelId, rawContent) => {
     const content = rawContent.trim();
     const state = get();
+    const id = createId('msg');
+    const createdAt = new Date().toISOString();
+    const status = state.isOnline ? 'sent' : 'sending';
     const message: Message = {
-      id: createId('msg'),
+      id,
       channelId,
       senderId: state.currentUserId,
       type: 'text',
       content,
       replyToId: state.replyToMessageId ?? undefined,
       reactions: [],
-      status: 'sent',
-      createdAt: new Date().toISOString(),
+      status,
+      createdAt,
     };
     set({
       messages: [...state.messages, message],
       replyToMessageId: null,
+      outbox: state.isOnline
+        ? state.outbox
+        : [...state.outbox, { id: createId('ob'), messageId: id, channelId, createdAt }],
     });
     return message;
   },
 
-  sendVoiceNote: (channelId, durationSec) => {
+  sendVoiceNote: (channelId, durationSec, audioUrl, waveformPeaks) => {
     const state = get();
     const safeDuration = Math.max(1, Math.round(durationSec));
     const mins = Math.floor(safeDuration / 60);
     const secs = String(safeDuration % 60).padStart(2, '0');
+    const id = createId('vn');
+    const createdAt = new Date().toISOString();
     const message: Message = {
-      id: createId('vn'),
+      id,
       channelId,
       senderId: state.currentUserId,
       type: 'voice_note',
       content: `Voice note (${mins}:${secs})`,
       voiceDurationSec: safeDuration,
+      audioUrl,
+      waveformPeaks: waveformPeaks && waveformPeaks.length > 0 ? waveformPeaks : [9, 16, 12, 22, 18, 10, 20, 15, 23, 13, 17, 11],
       reactions: [],
-      status: 'sent',
-      createdAt: new Date().toISOString(),
+      status: state.isOnline ? 'sent' : 'sending',
+      createdAt,
     };
-    set({ messages: [...state.messages, message] });
+    set({
+      messages: [...state.messages, message],
+      outbox: state.isOnline
+        ? state.outbox
+        : [...state.outbox, { id: createId('ob'), messageId: id, channelId, createdAt }],
+    });
     return message;
   },
 
-  sendQuickSnap: (channelId, caption, viewOnce = false) => {
+  sendQuickSnap: (channelId, caption, viewOnce = false, mediaUrl) => {
     const state = get();
     const gradient =
       SNAP_GRADIENTS[state.messages.length % SNAP_GRADIENTS.length];
+    const id = createId('snap');
+    const createdAt = new Date().toISOString();
     const message: Message = {
-      id: createId('snap'),
+      id,
       channelId,
       senderId: state.currentUserId,
       type: 'quick_snap',
       content: caption.trim() || 'Quick Snap 24 jam',
+      mediaUrl,
       snapCaption: caption.trim() || 'Momen spontan • 24 jam',
       snapGradient: gradient,
       snapViewOnce: viewOnce,
       snapViewedBy: [],
       reactions: [],
-      status: 'sent',
-      createdAt: new Date().toISOString(),
+      status: state.isOnline ? 'sent' : 'sending',
+      createdAt,
       expiresAt: new Date(Date.now() + 24 * 3_600_000).toISOString(),
     };
-    set({ messages: [...state.messages, message] });
+    set({
+      messages: [...state.messages, message],
+      outbox: state.isOnline
+        ? state.outbox
+        : [...state.outbox, { id: createId('ob'), messageId: id, channelId, createdAt }],
+    });
     return message;
   },
 
@@ -257,6 +472,86 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
         return { ...msg, snapViewedBy: [...viewed, currentUserId] };
       }),
     });
+  },
+
+  createCircle: (name, shortCode) => {
+    const state = get();
+    const cleanName = name.trim() || 'Circle Baru';
+    const code = (shortCode?.trim() || makeInitials(cleanName)).slice(0, 2).toUpperCase();
+    const inviteCode = `ZONA-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const circleId = createId('circle');
+    const defaultChId = createId('ch');
+
+    const circle: Circle = {
+      id: circleId,
+      name: cleanName,
+      shortCode: code,
+      accentColor: '#FACC15',
+      inviteCode,
+      description: 'Circle baru dibuat di ZONA',
+      memberIds: [state.currentUserId],
+    };
+
+    const defaultChannel: Channel = {
+      id: defaultChId,
+      circleId,
+      type: 'text',
+      name: 'obrolan',
+      topic: `Selamat datang di ${cleanName}!`,
+      unreadCount: 0,
+    };
+
+    const voiceLounge: VoiceLounge = {
+      id: createId('vl'),
+      circleId,
+      name: 'Ruang Santai',
+      topic: 'Drop-in Voice 1-Tap',
+      participantIds: [],
+      speakingUserIds: [],
+    };
+
+    set({
+      circles: [...state.circles, circle],
+      channels: [...state.channels, defaultChannel],
+      voiceLounges: [...state.voiceLounges, voiceLounge],
+      activeCircleId: circleId,
+      activeChannelId: defaultChId,
+    });
+
+    return circle;
+  },
+
+  joinCircleByCode: (rawCode) => {
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      return { ok: false, error: 'Masukkan kode undangan Circle.' };
+    }
+    const state = get();
+    const found = state.circles.find((c) => c.inviteCode.toUpperCase() === code);
+    if (found) {
+      const updated = state.circles.map((c) =>
+        c.id === found.id && !c.memberIds.includes(state.currentUserId)
+          ? { ...c, memberIds: [...c.memberIds, state.currentUserId] }
+          : c
+      );
+      const firstCh = state.channels.find((ch) => ch.circleId === found.id);
+      set({
+        circles: updated,
+        activeCircleId: found.id,
+        activeChannelId: firstCh?.id ?? state.activeChannelId,
+      });
+      return { ok: true, circle: found };
+    }
+
+    if (code.startsWith('ZONA-') && code.length >= 8) {
+      const created = state.createCircle(`Circle ${code.slice(5)}`, code.slice(5, 7));
+      return { ok: true, circle: created };
+    }
+
+    return {
+      ok: false,
+      error: 'Kode tidak ditemukan. Coba ZONA-KAMPUS07, ZONA-MABAR99, atau kode ZONA-XXXXXX.',
+    };
   },
 
   createChannel: (circleId, name, topic) => {
@@ -391,6 +686,23 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     });
   },
 
+  updateMyCoordinates: (point, areaLabel) => {
+    const { currentUserId, locations } = get();
+    const cur = locations[currentUserId];
+    if (!cur) return;
+    set({
+      locations: {
+        ...locations,
+        [currentUserId]: {
+          ...cur,
+          point,
+          areaLabel: areaLabel ?? cur.areaLabel,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  },
+
   createHangoutPin: ({ circleId, title, placeName, startsAtLabel, point }) => {
     const state = get();
     const pinId = createId('pin');
@@ -435,7 +747,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       content: `Ajak Kumpul di ${pin.placeName} — ${pin.title}`,
       hangoutPinId: pinId,
       reactions: [],
-      status: 'sent',
+      status: state.isOnline ? 'sent' : 'sending',
       createdAt: now,
     };
 
@@ -466,13 +778,32 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     });
   },
 
+  blockUser: (userId) => {
+    const { blockedUserIds, currentUserId } = get();
+    if (userId === currentUserId || blockedUserIds.includes(userId)) return;
+    set({ blockedUserIds: [...blockedUserIds, userId] });
+  },
+
+  unblockUser: (userId) => {
+    set((state) => ({
+      blockedUserIds: state.blockedUserIds.filter((id) => id !== userId),
+    }));
+  },
+
   hydrateSnapshot: (snapshot) => {
     set((state) => ({
       ...state,
+      ...(typeof snapshot.isAuthenticated === 'boolean'
+        ? { isAuthenticated: snapshot.isAuthenticated }
+        : {}),
+      ...(snapshot.profiles ? { profiles: { ...state.profiles, ...snapshot.profiles } } : {}),
+      ...(snapshot.circles ? { circles: snapshot.circles } : {}),
       ...(snapshot.channels ? { channels: snapshot.channels } : {}),
       ...(snapshot.messages ? { messages: snapshot.messages } : {}),
       ...(snapshot.hangoutPins ? { hangoutPins: snapshot.hangoutPins } : {}),
-      ...(snapshot.locations ? { locations: snapshot.locations } : {}),
+      ...(snapshot.locations ? { locations: { ...state.locations, ...snapshot.locations } } : {}),
+      ...(snapshot.blockedUserIds ? { blockedUserIds: snapshot.blockedUserIds } : {}),
+      ...(snapshot.outbox ? { outbox: snapshot.outbox } : {}),
     }));
   },
 }));

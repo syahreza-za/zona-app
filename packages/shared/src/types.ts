@@ -8,12 +8,15 @@ export type DeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
 export type RsvpStatus = 'going' | 'otw' | 'maybe';
 
+export type BackendMode = 'demo' | 'cloud';
+
 export interface Profile {
   id: string;
   username: string;
   displayName: string;
   initials: string;
   avatarColor: string;
+  avatarUrl?: string;
   statusEmoji: string;
   statusText: string;
   isOnline: boolean;
@@ -36,7 +39,7 @@ export interface Channel {
   type: ChannelType;
   name: string;
   topic?: string;
-  participantIds?: string[]; // for DM channels
+  participantIds?: string[];
   unreadCount: number;
   isEphemeral?: boolean;
   expiresAt?: string;
@@ -56,6 +59,9 @@ export interface Message {
   content: string;
   replyToId?: string;
   voiceDurationSec?: number;
+  audioUrl?: string;
+  waveformPeaks?: number[];
+  mediaUrl?: string;
   snapCaption?: string;
   snapGradient?: string;
   snapViewOnce?: boolean;
@@ -111,4 +117,18 @@ export interface VoiceLounge {
   topic: string;
   participantIds: string[];
   speakingUserIds: string[];
+}
+
+export interface PlaceSuggestion {
+  id: string;
+  name: string;
+  subtitle: string;
+  point: Coordinates;
+}
+
+export interface OutboxRecord {
+  id: string;
+  messageId: string;
+  channelId: string;
+  createdAt: string;
 }

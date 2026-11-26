@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   Battery,
   Compass,
+  Crosshair,
   Eye,
   EyeOff,
   Globe,
@@ -21,13 +22,14 @@ import {
   type Coordinates,
   type PrivacyMode,
 } from '@zona/shared';
+import { getBrowserGps } from '../services/geocoder';
 
 interface SocialMapPanelProps {
   onRequestPinAt: (coords: Coordinates, placeGuess: string) => void;
   highlightedPinId?: string | null;
+  onNotify: (msg: string) => void;
 }
 
-// Bounding box for stylized offline-ready South Jakarta demo canvas
 const BOUNDS = {
   minLat: -6.272,
   maxLat: -6.222,
@@ -56,19 +58,23 @@ function unprojectPercent(xPct: number, yPct: number): Coordinates {
 export function SocialMapPanel({
   onRequestPinAt,
   highlightedPinId,
+  onNotify,
 }: SocialMapPanelProps) {
   const {
     currentUserId,
     profiles,
     locations,
     hangoutPins,
+    blockedUserIds,
     selectedMapUserId,
     setSelectedMapUser,
     setMyPrivacyMode,
+    updateMyCoordinates,
     selectChannel,
   } = useZonaStore();
 
   const [mapEngine, setMapEngine] = useState<'stylized' | 'maplibre'>('stylized');
+  const [locating, setLocating] = useState(false);
   const mapHostRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
 
@@ -76,6 +82,7 @@ export function SocialMapPanel({
   const myPrivacy: PrivacyMode = myLocation?.privacyMode ?? 'exact';
 
   const visibleFriends = Object.values(locations)
+    .filter((loc) => !blockedUserIds.includes(loc.userId))
     .map((loc) => {
       const visiblePoint = resolveVisibleCoordinates(
         loc.point,
@@ -90,7 +97,22 @@ export function SocialMapPanel({
     })
     .filter((entry) => entry.profile && entry.visiblePoint !== null);
 
-  // Initialize optional real MapLibre GL WebGL vector map when toggled
+  const handleUseRealGps = async () => {
+    setLocating(true);
+    try {
+      const gps = await getBrowserGps();
+      updateMyCoordinates(gps, 'GPS Aktif');
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo({ center: [gps.lng, gps.lat], zoom: 14.5 });
+      }
+      onNotify(`Lokasi GPS diperbarui (${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)})`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Gagal mengakses GPS perangkat.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
   useEffect(() => {
     if (mapEngine !== 'maplibre' || !mapHostRef.current) return;
 
@@ -98,10 +120,11 @@ export function SocialMapPanel({
       import.meta.env.VITE_MAP_STYLE_URL ||
       'https://tiles.openfreemap.org/styles/liberty';
 
+    const centerPoint = myLocation?.point ?? { lat: -6.248, lng: 106.8065 };
     const map = new maplibregl.Map({
       container: mapHostRef.current,
       style: styleUrl,
-      center: [106.8065, -6.248],
+      center: [centerPoint.lng, centerPoint.lat],
       zoom: 13.2,
     });
 
@@ -144,7 +167,7 @@ export function SocialMapPanel({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [mapEngine, hangoutPins.length, myPrivacy]);
+  }, [mapEngine, hangoutPins.length, myPrivacy, myLocation?.point.lat, myLocation?.point.lng]);
 
   const handleStylizedClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -171,27 +194,39 @@ export function SocialMapPanel({
             </strong>
           </div>
 
-          <button
-            id="btn-toggle-map-engine"
-            type="button"
-            className="pill-action"
-            onClick={() =>
-              setMapEngine((m) => (m === 'stylized' ? 'maplibre' : 'stylized'))
-            }
-            title="Ganti antara Peta Ilustrasi Offline & MapLibre Vector Live"
-          >
-            {mapEngine === 'stylized' ? (
-              <>
-                <Globe size={13} />
-                <span>Vector Live</span>
-              </>
-            ) : (
-              <>
-                <Layers size={13} />
-                <span>Ilustrasi</span>
-              </>
-            )}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              className="pill-action"
+              onClick={handleUseRealGps}
+              disabled={locating}
+              title="Perbarui titik dari GPS perangkat"
+            >
+              <Crosshair size={13} />
+              <span>{locating ? '...' : 'GPS'}</span>
+            </button>
+            <button
+              id="btn-toggle-map-engine"
+              type="button"
+              className="pill-action"
+              onClick={() =>
+                setMapEngine((m) => (m === 'stylized' ? 'maplibre' : 'stylized'))
+              }
+              title="Ganti antara Peta Ilustrasi Offline & MapLibre Vector Live"
+            >
+              {mapEngine === 'stylized' ? (
+                <>
+                  <Globe size={13} />
+                  <span>Vector</span>
+                </>
+              ) : (
+                <>
+                  <Layers size={13} />
+                  <span>Ilustrasi</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="privacy-segment" role="group" aria-label="Mode Privasi Peta">
@@ -207,7 +242,10 @@ export function SocialMapPanel({
               id={`privacy-btn-${mode}`}
               type="button"
               className={`privacy-btn ${myPrivacy === mode ? `active ${mode}` : ''}`}
-              onClick={() => setMyPrivacyMode(mode)}
+              onClick={() => {
+                setMyPrivacyMode(mode);
+                onNotify(`Mode lokasi diubah ke ${label}.`);
+              }}
             >
               <Icon size={12} />
               <span>{label}</span>

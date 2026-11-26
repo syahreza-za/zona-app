@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Copy,
   Hash,
   Headphones,
   MapPin,
@@ -7,18 +8,30 @@ import {
   MicOff,
   PhoneOff,
   Plus,
+  Settings,
   Volume2,
   VolumeX,
+  WifiOff,
 } from 'lucide-react';
 import { useZonaStore } from '@zona/shared';
 
 interface ChannelSidebarProps {
   onChannelPicked?: () => void;
+  onOpenCircleModal: () => void;
+  onOpenSettings: () => void;
+  onNotify: (msg: string) => void;
 }
 
-export function ChannelSidebar({ onChannelPicked }: ChannelSidebarProps) {
+export function ChannelSidebar({
+  onChannelPicked,
+  onOpenCircleModal,
+  onOpenSettings,
+  onNotify,
+}: ChannelSidebarProps) {
   const {
     currentUserId,
+    isOnline,
+    outbox,
     profiles,
     circles,
     channels,
@@ -55,37 +68,67 @@ export function ChannelSidebar({ onChannelPicked }: ChannelSidebarProps) {
     createChannel(activeCircle.id, newChannelName);
     setNewChannelName('');
     setAddingChannel(false);
+    onNotify('Kanal topik baru dibuat.');
     onChannelPicked?.();
+  };
+
+  const handleCopyInvite = async () => {
+    if (!activeCircle) return;
+    const inviteUrl = `${window.location.origin}/?invite=${activeCircle.inviteCode}`;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      onNotify(`Link undangan disalin (${activeCircle.inviteCode})`);
+    } catch {
+      onNotify(`Kode undangan: ${activeCircle.inviteCode}`);
+    }
   };
 
   return (
     <section className="channel-sidebar" aria-label="Daftar Chat dan Voice Lounge">
       <header className="sidebar-header">
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h2 className="sidebar-title">
             {activeCircle ? activeCircle.name : 'Pesan Langsung'}
           </h2>
           <p className="sidebar-subtitle">
             {activeCircle
-              ? `${activeCircle.memberIds.length} anggota • ${activeCircle.inviteCode}`
+              ? `${activeCircle.memberIds.length} anggota · ${activeCircle.inviteCode}`
               : 'Chat cepat offline-first'}
           </p>
         </div>
 
-        {activeCircle && (
-          <button
-            id="btn-add-channel"
-            type="button"
-            className="icon-btn"
-            onClick={() => setAddingChannel((v) => !v)}
-            title="Buat kanal topik baru"
-          >
-            <Plus size={18} />
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {activeCircle && (
+            <>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={handleCopyInvite}
+                title="Salin Link Undangan Circle"
+              >
+                <Copy size={15} />
+              </button>
+              <button
+                id="btn-add-channel"
+                type="button"
+                className="icon-btn"
+                onClick={() => setAddingChannel((v) => !v)}
+                title="Buat kanal topik baru"
+              >
+                <Plus size={18} />
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
-      {/* Quick switcher pills for mobile view where rail is hidden */}
+      {!isOnline && (
+        <div className="offline-strip">
+          <WifiOff size={13} />
+          <span>Offline · {outbox.length} pesan antri sinkronisasi</span>
+        </div>
+      )}
+
       <div className="sidebar-scroll">
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button
@@ -105,6 +148,14 @@ export function ChannelSidebar({ onChannelPicked }: ChannelSidebarProps) {
               {circle.shortCode} · {circle.name.split(' ')[0]}
             </button>
           ))}
+          <button
+            type="button"
+            className="pill-action"
+            onClick={onOpenCircleModal}
+            title="Buat atau Gabung Circle"
+          >
+            + Circle
+          </button>
         </div>
 
         {addingChannel && activeCircle && (
@@ -309,6 +360,14 @@ export function ChannelSidebar({ onChannelPicked }: ChannelSidebarProps) {
                 @{me.username} · {me.statusEmoji} {me.statusText}
               </span>
             </div>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={onOpenSettings}
+              title="Edit Profil & Pengaturan"
+            >
+              <Settings size={15} />
+            </button>
           </div>
         )}
       </footer>
