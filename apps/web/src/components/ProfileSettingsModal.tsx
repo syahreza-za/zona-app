@@ -19,6 +19,7 @@ import {
 import { AVATAR_VARIANT_COUNT, Avatar, PRESET_AVATAR_URLS } from './Avatar';
 import { clearWorkspaceSnapshot } from '../services/offlineDb';
 import { compressImageFile } from '../services/mediaTools';
+import { zonaCloudSync } from '../services/cloudSync';
 
 interface ProfileSettingsModalProps {
   theme: 'dark' | 'light';
@@ -37,10 +38,10 @@ const CHAT_THEMES: Array<{
   swatchLight: string;
   swatchDark: string;
 }> = [
-  { id: 'clean', label: 'Default Clean', swatchLight: '#EEF3F0', swatchDark: '#252932' },
-  { id: 'warm-sand', label: 'Warm Sand', swatchLight: '#F4F1EA', swatchDark: '#262320' },
-  { id: 'ocean-mist', label: 'Ocean Mist', swatchLight: '#ECF4F8', swatchDark: '#1C2632' },
-  { id: 'midnight-forest', label: 'Midnight Forest', swatchLight: '#E8F2EC', swatchDark: '#172320' },
+  { id: 'clean', label: 'Default Clean', swatchLight: '#EEF3F0', swatchDark: '#1B1F2A' },
+  { id: 'warm-sand', label: 'Warm Sand', swatchLight: '#F4F1EA', swatchDark: '#201D1A' },
+  { id: 'ocean-mist', label: 'Ocean Mist', swatchLight: '#ECF4F8', swatchDark: '#16202C' },
+  { id: 'midnight-forest', label: 'Midnight Forest', swatchLight: '#E8F2EC', swatchDark: '#131F1C' },
 ];
 
 export function ProfileSettingsModal({
@@ -98,6 +99,14 @@ export function ProfileSettingsModal({
       statusText,
       avatarColor,
       avatarVariant,
+      avatarUrl,
+    });
+    void zonaCloudSync.syncProfile({
+      displayName,
+      username,
+      statusEmoji,
+      statusText,
+      avatarColor,
       avatarUrl,
     });
     onNotify('Profil diperbarui.');
@@ -291,6 +300,7 @@ export function ProfileSettingsModal({
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
                 onClick={() => {
                   setMyPrivacyMode(id);
+                  void zonaCloudSync.syncLocation({ privacyMode: id });
                   onNotify(`Privasi peta: ${label}`);
                 }}
               >
@@ -324,6 +334,7 @@ export function ProfileSettingsModal({
                 style={{ height: 30, fontSize: 12 }}
                 onClick={() => {
                   unblockUser(uid);
+                  void zonaCloudSync.syncUnblockUser(uid);
                   onNotify('Blokir dibuka.');
                 }}
               >
@@ -347,7 +358,11 @@ export function ProfileSettingsModal({
             type="button"
             className="btn-secondary"
             style={{ flex: 1 }}
-            onClick={() => {
+            onClick={async () => {
+              if (backendMode === 'cloud' && cloudBackend.isConfigured()) {
+                await cloudBackend.signOut().catch(() => undefined);
+              }
+              zonaCloudSync.stopRealtime();
               signOutSession();
               onClose?.();
             }}

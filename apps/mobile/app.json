@@ -6,25 +6,56 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "zona",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F1117"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.zona.messenger",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "ZONA menggunakan lokasimu untuk menampilkan posisi di Peta Sosial sesuai mode privasi (Tepat, Area, atau Ghost).",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ZONA memperbarui lokasi secara hemat baterai di latar belakang hanya saat mode privasi mengizinkan.",
         "NSMicrophoneUsageDescription": "ZONA memerlukan mikrofon untuk pesan suara dan Voice Lounge.",
         "NSCameraUsageDescription": "ZONA memerlukan kamera untuk mengambil foto Quick Snap.",
+        "NSPhotoLibraryUsageDescription": "ZONA memerlukan akses galeri untuk memilih foto Quick Snap atau avatar.",
         "UIBackgroundModes": ["audio", "location"]
       }
     },
     "android": {
       "package": "app.zona.messenger",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#10B981"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "RECORD_AUDIO",
         "CAMERA"
       ]
-    }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ZONA menggunakan lokasimu untuk Peta Sosial sesuai mode privasi yang kamu pilih."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ZONA memerlukan akses foto untuk mengirim Quick Snap 24 jam.",
+          "cameraPermission": "ZONA memerlukan kamera untuk mengambil foto Quick Snap."
+        }
+      ]
+    ]
   }
 }

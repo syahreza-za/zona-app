@@ -41,6 +41,7 @@ import { ReportModal } from './ReportModal';
 import { HANGOUT_CATEGORY_META } from './SocialMapPanel';
 import { VoiceNoteRecorder } from '../services/mediaTools';
 import { buildDirectionsUrl } from '../services/geocoder';
+import { zonaCloudSync } from '../services/cloudSync';
 
 interface ChatPanelProps {
   theme: 'dark' | 'light';
@@ -219,11 +220,14 @@ export function ChatPanel({
 
   const submitMessage = () => {
     if (!activeChannel || !draft.trim()) return;
+    zonaCloudSync.notifyTyping(false);
     if (editingMessage) {
       editMessage(editingMessage.id, draft);
+      void zonaCloudSync.syncEditMessage(editingMessage.id, draft.trim());
       onNotify('Pesan diperbarui.');
     } else {
-      sendTextMessage(activeChannel.id, draft);
+      const sent = sendTextMessage(activeChannel.id, draft);
+      void zonaCloudSync.syncSendMessage(sent);
     }
     setDraft('');
     setAttachOpen(false);
@@ -268,17 +272,20 @@ export function ChatPanel({
     if (realMicActive && recorderRef.current) {
       try {
         const recorded = await recorderRef.current.stop();
-        sendVoiceNote(
+        const vnMsg = sendVoiceNote(
           activeChannel.id,
           recorded.durationSec,
           recorded.dataUrl,
           recorded.waveformPeaks
         );
+        void zonaCloudSync.syncSendMessage(vnMsg);
       } catch {
-        sendVoiceNote(activeChannel.id, fallbackDuration);
+        const vnMsg = sendVoiceNote(activeChannel.id, fallbackDuration);
+        void zonaCloudSync.syncSendMessage(vnMsg);
       }
     } else {
-      sendVoiceNote(activeChannel.id, fallbackDuration);
+      const vnMsg = sendVoiceNote(activeChannel.id, fallbackDuration);
+      void zonaCloudSync.syncSendMessage(vnMsg);
     }
 
     recorderRef.current = null;
@@ -551,7 +558,10 @@ export function ChatPanel({
                           key={emoji}
                           type="button"
                           className="hover-act-btn"
-                          onClick={() => toggleReaction(msg.id, emoji)}
+                          onClick={() => {
+                            toggleReaction(msg.id, emoji);
+                            void zonaCloudSync.syncToggleReaction(msg.id, emoji);
+                          }}
                           title={`Reaksi ${emoji}`}
                         >
                           {emoji}
@@ -609,6 +619,7 @@ export function ChatPanel({
                                 className="context-menu-item danger"
                                 onClick={() => {
                                   deleteMessage(msg.id);
+                                  void zonaCloudSync.syncDeleteMessage(msg.id);
                                   setOpenMenuMsgId(null);
                                   onNotify('Pesan dihapus.');
                                 }}
@@ -639,6 +650,7 @@ export function ChatPanel({
                                   className="context-menu-item danger"
                                   onClick={() => {
                                     blockUser(msg.senderId);
+                                    void zonaCloudSync.syncBlockUser(msg.senderId);
                                     setOpenMenuMsgId(null);
                                     onNotify(`${sender?.displayName ?? 'Pengguna'} diblokir.`);
                                   }}
@@ -903,7 +915,10 @@ export function ChatPanel({
                                     className={`rsvp-choice ${
                                       myRsvp?.status === opt.id ? 'selected' : ''
                                     }`}
-                                    onClick={() => respondToHangout(pin.id, opt.id)}
+                                    onClick={() => {
+                                      respondToHangout(pin.id, opt.id);
+                                      void zonaCloudSync.syncHangoutRsvp(pin.id, opt.id);
+                                    }}
                                   >
                                     {opt.label}
                                   </button>
@@ -955,7 +970,10 @@ export function ChatPanel({
                           className={`reaction-pill ${
                             r.userIds.includes(currentUserId) ? 'mine' : ''
                           }`}
-                          onClick={() => toggleReaction(msg.id, r.emoji)}
+                          onClick={() => {
+                            toggleReaction(msg.id, r.emoji);
+                            void zonaCloudSync.syncToggleReaction(msg.id, r.emoji);
+                          }}
                         >
                           <span>{r.emoji}</span>
                           <span>{r.userIds.length}</span>
@@ -1168,6 +1186,7 @@ export function ChatPanel({
                   onChange={(e) => {
                     setDraft(e.target.value);
                     adjustTextareaHeight(e.target);
+                    zonaCloudSync.notifyTyping(e.target.value.trim().length > 0);
                   }}
                   onKeyDown={handleKeyDown}
                 />
@@ -1218,7 +1237,8 @@ export function ChatPanel({
         <QuickSnapModal
           onClose={() => setSnapOpen(false)}
           onSend={({ caption, viewOnce, mediaUrl }) => {
-            sendQuickSnap(activeChannel.id, caption, viewOnce, mediaUrl);
+            const snapMsg = sendQuickSnap(activeChannel.id, caption, viewOnce, mediaUrl);
+            void zonaCloudSync.syncSendMessage(snapMsg);
             onNotify('Quick Snap terkirim.');
           }}
         />
@@ -1230,6 +1250,11 @@ export function ChatPanel({
           onClose={() => setReportTarget(null)}
           onSubmit={(reason) => {
             reportContent({
+              targetUserId: reportTarget.userId,
+              targetMessageId: reportTarget.messageId,
+              reason,
+            });
+            void zonaCloudSync.syncReportContent({
               targetUserId: reportTarget.userId,
               targetMessageId: reportTarget.messageId,
               reason,

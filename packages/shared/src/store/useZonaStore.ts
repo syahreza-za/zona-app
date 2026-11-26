@@ -10,6 +10,7 @@ import {
   DEMO_VOICE_LOUNGES,
 } from '../demo/seedData';
 import { estimateEtaMinutes } from '../map/fuzzyLocation';
+import { createClientUuid } from '../supabase/cloudSyncCore';
 import type {
   BackendMode,
   Channel,
@@ -132,6 +133,7 @@ export interface ZonaState {
   toggleMute: () => void;
   toggleDeafen: () => void;
   toggleScreenShare: () => void;
+  setVoiceSpeakingUsers: (loungeId: string, speakingUserIds: string[]) => void;
 
   // Live Social Map & Bridge ("Ajak Kumpul")
   setMyPrivacyMode: (mode: PrivacyMode) => void;
@@ -156,6 +158,32 @@ export interface ZonaState {
     reason: string;
   }) => ModerationReport;
 
+  // Real-Time Cloud Sync & Hydration Helpers
+  hydrateCloudWorkspace: (snapshot: {
+    profiles: Record<string, Profile>;
+    circles: Circle[];
+    channels: Channel[];
+    messages: Message[];
+    hangoutPins: HangoutPin[];
+    locations: Record<string, UserLocation>;
+    voiceLounges: VoiceLounge[];
+    blockedUserIds: string[];
+  }) => void;
+  applyIncomingMessage: (msg: Message) => void;
+  applyMessageUpdate: (messageId: string, patch: Partial<Message>) => void;
+  applyIncomingChannel: (channel: Channel) => void;
+  applyIncomingHangoutPin: (pin: HangoutPin) => void;
+  applyIncomingHangoutRsvp: (pinId: string, userId: string, status: RsvpStatus) => void;
+  applyCloudLocations: (locs: Record<string, UserLocation>) => void;
+  markMessageSynced: (messageId: string, patch?: Partial<Message>) => void;
+  queueMessageForOutbox: (messageId: string, channelId: string) => void;
+  replaceEntityId: (
+    entity: 'circle' | 'channel' | 'pin',
+    tempId: string,
+    realId: string,
+    extra?: { inviteCode?: string }
+  ) => void;
+
   hydrateSnapshot: (
     snapshot: Partial<
       Pick<
@@ -176,6 +204,9 @@ export interface ZonaState {
 }
 
 function createId(prefix: string): string {
+  if (prefix === 'msg' || prefix === 'vn' || prefix === 'snap') {
+    return createClientUuid();
+  }
   return `${prefix}-${Date.now().toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 6)}`;
@@ -377,7 +408,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
 
   setOnlineStatus: (online) => {
     set({ isOnline: online });
-    if (online) {
+    if (online && get().backendMode === 'demo') {
       get().flushOutbox();
     }
   },
@@ -855,6 +886,14 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     set((state) => ({ isScreenSharing: !state.isScreenSharing }));
   },
 
+  setVoiceSpeakingUsers: (loungeId, speakingUserIds) => {
+    set((state) => ({
+      voiceLounges: state.voiceLounges.map((vl) =>
+        vl.id === loungeId ? { ...vl, speakingUserIds } : vl
+      ),
+    }));
+  },
+
   setMyPrivacyMode: (mode) => {
     const { currentUserId, locations } = get();
     const current = locations[currentUserId];
@@ -1016,6 +1055,192 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     };
     set((state) => ({ reports: [report, ...state.reports] }));
     return report;
+  },
+
+  hydrateCloudWorkspace: (snapshot) => {
+    set((state) => {
+      const firstCircle = snapshot.circles[0] ?? null;
+      const firstChannel =
+        snapshot.channels.find((ch) => ch.circleId === (firstCircle?.id ?? null)) ??
+        snapshot.channels[0];
+      const keepActiveChannel = snapshot.channels.some((c) => c.id === state.activeChannelId);
+
+      // Keep any unsynced outbox messages locally so offline messages are never dropped
+      const pendingIds = new Set(state.outbox.map((o) => o.messageId));
+      const pendingMessages = state.messages.filter((m) => pendingIds.has(m.id));
+      const cloudIds = new Set(snapshot.messages.map((m) => m.id));
+      const mergedMessages = [
+        ...snapshot.messages,
+        ...pendingMessages.filter((m) => !cloudIds.has(m.id)),
+      ];
+
+      return {
+        ...state,
+        profiles: { ...state.profiles, ...snapshot.profiles },
+        circles: snapshot.circles.length > 0 ? snapshot.circles : state.circles,
+        channels: snapshot.channels.length > 0 ? snapshot.channels : state.channels,
+        messages: snapshot.channels.length > 0 ? mergedMessages : state.messages,
+        hangoutPins: snapshot.hangoutPins,
+        locations: { ...state.locations, ...snapshot.locations },
+        voiceLounges:
+          snapshot.voiceLounges.length > 0 ? snapshot.voiceLounges : state.voiceLounges,
+        blockedUserIds: snapshot.blockedUserIds,
+        activeCircleId: keepActiveChannel
+          ? state.activeCircleId
+          : firstCircle?.id ?? state.activeCircleId,
+        activeChannelId: keepActiveChannel
+          ? state.activeChannelId
+          : firstChannel?.id ?? state.activeChannelId,
+      };
+    });
+  },
+
+  applyIncomingMessage: (msg) => {
+    set((state) => {
+      const exists = state.messages.some((m) => m.id === msg.id);
+      const nextMessages = exists
+        ? state.messages.map((m) => (m.id === msg.id ? { ...m, ...msg, status: 'delivered' as const } : m))
+        : [...state.messages, msg];
+      const shouldIncrementUnread =
+        !exists &&
+        msg.senderId !== state.currentUserId &&
+        msg.channelId !== state.activeChannelId;
+
+      return {
+        messages: nextMessages,
+        channels: shouldIncrementUnread
+          ? state.channels.map((ch) =>
+              ch.id === msg.channelId ? { ...ch, unreadCount: ch.unreadCount + 1 } : ch
+            )
+          : state.channels,
+      };
+    });
+  },
+
+  applyMessageUpdate: (messageId, patch) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, ...patch } : m
+      ),
+    }));
+  },
+
+  applyIncomingChannel: (channel) => {
+    set((state) => {
+      const exists = state.channels.some((c) => c.id === channel.id);
+      return {
+        channels: exists
+          ? state.channels.map((c) => (c.id === channel.id ? { ...c, ...channel } : c))
+          : [...state.channels, channel],
+      };
+    });
+  },
+
+  applyIncomingHangoutPin: (pin) => {
+    set((state) => {
+      const exists = state.hangoutPins.some((p) => p.id === pin.id);
+      return {
+        hangoutPins: exists
+          ? state.hangoutPins.map((p) => (p.id === pin.id ? { ...p, ...pin } : p))
+          : [pin, ...state.hangoutPins],
+      };
+    });
+  },
+
+  applyIncomingHangoutRsvp: (pinId, userId, status) => {
+    set((state) => ({
+      hangoutPins: state.hangoutPins.map((pin) => {
+        if (pin.id !== pinId) return pin;
+        const others = pin.rsvps.filter((r) => r.userId !== userId);
+        return {
+          ...pin,
+          rsvps: [...others, { userId, status }],
+        };
+      }),
+    }));
+  },
+
+  applyCloudLocations: (locs) => {
+    set((state) => ({
+      locations: { ...state.locations, ...locs },
+    }));
+  },
+
+  markMessageSynced: (messageId, patch) => {
+    set((state) => ({
+      outbox: state.outbox.filter((o) => o.messageId !== messageId),
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, ...(patch ?? {}), status: 'sent' } : m
+      ),
+    }));
+  },
+
+  queueMessageForOutbox: (messageId, channelId) => {
+    set((state) => {
+      const already = state.outbox.some((o) => o.messageId === messageId);
+      return {
+        outbox: already
+          ? state.outbox
+          : [
+              ...state.outbox,
+              {
+                id: createId('ob'),
+                messageId,
+                channelId,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+        messages: state.messages.map((m) =>
+          m.id === messageId ? { ...m, status: 'sending' } : m
+        ),
+      };
+    });
+  },
+
+  replaceEntityId: (entity, tempId, realId, extra) => {
+    set((state) => {
+      if (entity === 'circle') {
+        return {
+          circles: state.circles.map((c) =>
+            c.id === tempId
+              ? { ...c, id: realId, ...(extra?.inviteCode ? { inviteCode: extra.inviteCode } : {}) }
+              : c
+          ),
+          channels: state.channels.map((ch) =>
+            ch.circleId === tempId ? { ...ch, circleId: realId } : ch
+          ),
+          voiceLounges: state.voiceLounges.map((vl) =>
+            vl.circleId === tempId ? { ...vl, circleId: realId } : vl
+          ),
+          activeCircleId: state.activeCircleId === tempId ? realId : state.activeCircleId,
+        };
+      }
+      if (entity === 'channel') {
+        return {
+          channels: state.channels.map((ch) =>
+            ch.id === tempId ? { ...ch, id: realId } : ch
+          ),
+          messages: state.messages.map((m) =>
+            m.channelId === tempId ? { ...m, channelId: realId } : m
+          ),
+          hangoutPins: state.hangoutPins.map((p) =>
+            p.channelId === tempId ? { ...p, channelId: realId } : p
+          ),
+          activeChannelId: state.activeChannelId === tempId ? realId : state.activeChannelId,
+        };
+      }
+      return {
+        hangoutPins: state.hangoutPins.map((p) =>
+          p.id === tempId ? { ...p, id: realId } : p
+        ),
+        channels: state.channels.map((ch) =>
+          ch.hangoutPinId === tempId ? { ...ch, hangoutPinId: realId } : ch
+        ),
+        messages: state.messages.map((m) =>
+          m.hangoutPinId === tempId ? { ...m, hangoutPinId: realId } : m
+        ),
+      };
+    });
   },
 
   hydrateSnapshot: (snapshot) => {

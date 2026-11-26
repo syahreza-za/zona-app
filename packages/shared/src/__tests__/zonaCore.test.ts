@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   clusterMapMarkers,
+  createClientUuid,
+  dataUrlToBlob,
   distanceMeters,
   estimateEtaMinutes,
+  flushCloudOutbox,
   formatDateSeparator,
   groupMessages,
+  isValidUuid,
+  mapDbMessageToMessage,
+  mapMapMemberToLocation,
   resolveVisibleCoordinates,
   useZonaStore,
   type Message,
@@ -210,5 +216,169 @@ describe('ZONA Production Store (Offline Outbox, Circles, Safety & Bridge)', () 
     next = useZonaStore.getState();
     expect(next.activeVoiceLoungeId).toBeNull();
     expect(next.isScreenSharing).toBe(false);
+  });
+});
+
+describe('ZONA Cloud Sync Core & Outbox Retry Logic', () => {
+  it('generates valid RFC 4122 UUIDs for optimistic messages', () => {
+    const id = createClientUuid();
+    expect(isValidUuid(id)).toBe(true);
+    expect(isValidUuid('msg-legacy-123')).toBe(false);
+  });
+
+  it('converts base64 data URLs to Blobs with proper extension', () => {
+    const sampleDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+    const res = dataUrlToBlob(sampleDataUrl);
+    expect(res).not.toBeNull();
+    expect(res?.ext).toBe('png');
+    expect(res?.blob.type).toBe('image/png');
+    expect(res?.blob.size).toBeGreaterThan(0);
+  });
+
+  it('uploads Quick Snap media to signed URL and flushes outbox cleanly', async () => {
+    const snapId = createClientUuid();
+    const textId = createClientUuid();
+    const uploaded: string[] = [];
+    const sent: Message[] = [];
+
+    const messages: Message[] = [
+      {
+        id: textId,
+        channelId: createClientUuid(),
+        senderId: createClientUuid(),
+        type: 'text',
+        content: 'Pesan offline pertama',
+        reactions: [],
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: snapId,
+        channelId: createClientUuid(),
+        senderId: createClientUuid(),
+        type: 'quick_snap',
+        content: 'Ngopi sore',
+        mediaUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+        snapCaption: 'Ngopi sore',
+        reactions: [],
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    const outbox = messages.map((m, idx) => ({
+      id: `ob-${idx}`,
+      messageId: m.id,
+      channelId: m.channelId,
+      createdAt: m.createdAt,
+    }));
+
+    const result = await flushCloudOutbox({
+      outbox,
+      messages,
+      adapter: {
+        uploadMediaBlob: async (_uid, _blob, ext) => {
+          uploaded.push(ext);
+          return `https://cdn.zona.app/signed/${snapId}.${ext}`;
+        },
+        sendMessage: async (msg) => {
+          sent.push(msg);
+        },
+      },
+    });
+
+    expect(result.syncedIds).toEqual([textId, snapId]);
+    expect(result.failedIds).toEqual([]);
+    expect(uploaded).toEqual(['jpg']);
+    expect(result.updatedMediaUrls[snapId]?.mediaUrl).toContain('https://cdn.zona.app/signed/');
+    expect(sent.find((m) => m.id === snapId)?.mediaUrl).toContain('https://cdn.zona.app/signed/');
+  });
+
+  it('retries transient send failures and retains permanently failing items in outbox without data loss', async () => {
+    const flakyId = createClientUuid();
+    const brokenId = createClientUuid();
+    let flakyAttempts = 0;
+
+    const messages: Message[] = [
+      {
+        id: flakyId,
+        channelId: createClientUuid(),
+        senderId: createClientUuid(),
+        type: 'text',
+        content: 'Berhasil di percobaan kedua',
+        reactions: [],
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: brokenId,
+        channelId: createClientUuid(),
+        senderId: createClientUuid(),
+        type: 'text',
+        content: 'Tetap di antrean saat server down',
+        reactions: [],
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    const outbox = messages.map((m, idx) => ({
+      id: `ob-${idx}`,
+      messageId: m.id,
+      channelId: m.channelId,
+      createdAt: m.createdAt,
+    }));
+
+    const result = await flushCloudOutbox({
+      outbox,
+      messages,
+      maxRetriesPerItem: 2,
+      adapter: {
+        uploadMediaBlob: async () => 'https://example.com/unused',
+        sendMessage: async (msg) => {
+          if (msg.id === flakyId) {
+            flakyAttempts += 1;
+            if (flakyAttempts === 1) throw new Error('Transient 503');
+            return;
+          }
+          throw new Error('Persistent offline');
+        },
+      },
+    });
+
+    expect(flakyAttempts).toBe(2);
+    expect(result.syncedIds).toEqual([flakyId]);
+    expect(result.failedIds).toEqual([brokenId]);
+  });
+
+  it('maps Supabase message and map member rows accurately', () => {
+    const mappedMsg = mapDbMessageToMessage({
+      id: createClientUuid(),
+      channel_id: createClientUuid(),
+      sender_id: createClientUuid(),
+      msg_type: 'voice_note',
+      content: 'Pesan suara (0:12)',
+      media_url: 'https://cdn.zona.app/vn.webm',
+      voice_duration_sec: 12,
+      created_at: '2026-11-26T08:00:00Z',
+    });
+    expect(mappedMsg.type).toBe('voice_note');
+    expect(mappedMsg.audioUrl).toBe('https://cdn.zona.app/vn.webm');
+    expect(mappedMsg.voiceDurationSec).toBe(12);
+
+    const mappedLoc = mapMapMemberToLocation({
+      user_id: createClientUuid(),
+      privacy_mode: 'fuzzy',
+      lat: -6.2442,
+      lng: 106.8006,
+      area_label: 'Senopati',
+      activity_emoji: '🎧',
+      activity_text: 'Di ruang suara',
+      battery_pct: 78,
+      updated_at: '2026-11-26T08:00:00Z',
+    });
+    expect(mappedLoc.privacyMode).toBe('fuzzy');
+    expect(mappedLoc.point.lat).toBeCloseTo(-6.2442, 4);
+    expect(mappedLoc.areaLabel).toBe('Senopati');
   });
 });

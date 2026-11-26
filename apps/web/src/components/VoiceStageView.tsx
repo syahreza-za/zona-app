@@ -61,6 +61,12 @@ export function VoiceStageView({ onCloseStage, onNotify }: VoiceStageViewProps) 
     await zonaVoiceEngine.setMuted(next);
   };
 
+  const handleToggleDeafen = async () => {
+    const next = !isDeafened;
+    toggleDeafen();
+    await zonaVoiceEngine.setDeafened(next);
+  };
+
   const handleToggleScreen = async () => {
     const next = !isScreenSharing;
     const ok = await zonaVoiceEngine.setScreenShare(next);
@@ -75,6 +81,8 @@ export function VoiceStageView({ onCloseStage, onNotify }: VoiceStageViewProps) 
     leaveVoiceLounge();
     onCloseStage();
   };
+
+  const isLivekit = zonaVoiceEngine.getConnectionMode() === 'livekit';
 
   return (
     <main className="voice-stage-canvas" aria-label="Voice Stage">
@@ -102,7 +110,7 @@ export function VoiceStageView({ onCloseStage, onNotify }: VoiceStageViewProps) 
 
         <span className="voice-live-chip">
           <span className="voice-live-dot" />
-          <span>Terhubung</span>
+          <span>{isLivekit ? 'LiveKit WebRTC' : 'Terhubung'}</span>
         </span>
       </header>
 
@@ -188,7 +196,7 @@ export function VoiceStageView({ onCloseStage, onNotify }: VoiceStageViewProps) 
           <button
             type="button"
             className={`stage-ctrl-circle ${isDeafened ? 'danger' : ''}`}
-            onClick={toggleDeafen}
+            onClick={handleToggleDeafen}
             title={isDeafened ? 'Aktifkan speaker' : 'Deafen'}
             aria-label="Speaker"
           >

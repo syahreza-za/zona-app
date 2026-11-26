@@ -30,6 +30,7 @@ import {
   type PrivacyMode,
 } from '@zona/shared';
 import { Avatar, resolveAvatarImageUrl } from './Avatar';
+import { zonaCloudSync } from '../services/cloudSync';
 import { buildDirectionsUrl, getBrowserGps, searchRealPlaces } from '../services/geocoder';
 
 interface SocialMapPanelProps {
@@ -480,6 +481,7 @@ export function SocialMapPanel({
     try {
       const gps = await getBrowserGps();
       updateMyCoordinates(gps, 'Lokasi Saat Ini');
+      void zonaCloudSync.syncLocation({ point: gps, areaLabel: 'Lokasi Saat Ini' });
       mapRef.current?.flyTo({ center: [gps.lng, gps.lat], zoom: 14.4, pitch: 24, bearing: 0 });
       onNotify('Lokasi diperbarui dari GPS.');
     } catch {
@@ -736,6 +738,7 @@ export function SocialMapPanel({
                 className={`map-privacy-opt ${myPrivacy === mode ? `active ${mode}` : ''}`}
                 onClick={() => {
                   setMyPrivacyMode(mode);
+                  void zonaCloudSync.syncLocation({ privacyMode: mode });
                   onNotify(`Privasi lokasi: ${label}`);
                 }}
                 title={`Mode ${label}`}

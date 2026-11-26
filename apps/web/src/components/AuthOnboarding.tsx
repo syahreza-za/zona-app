@@ -152,6 +152,18 @@ export function AuthOnboarding({
       mode: pendingMode,
       userId: pendingUserId,
     });
+    if (pendingMode === 'cloud' && pendingUserId && cloudBackend.isConfigured()) {
+      void cloudBackend
+        .upsertProfile(pendingUserId, {
+          displayName,
+          username,
+          avatarColor,
+          avatarUrl,
+          statusEmoji: '☕',
+          statusText: 'Lagi santai di Blok M',
+        })
+        .catch(() => undefined);
+    }
     onNotify(`Selamat datang, ${displayName}.`);
   };
 

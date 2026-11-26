@@ -4,4 +4,5 @@ export * from './map/fuzzyLocation';
 export * from './map/clustering';
 export * from './demo/seedData';
 export * from './store/useZonaStore';
+export * from './supabase/cloudSyncCore';
 export * from './supabase/zonaBackend';

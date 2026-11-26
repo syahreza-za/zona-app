@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,12 +12,18 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import {
   clusterMapMarkers,
+  createZonaCloudBackend,
+  dataUrlToBlob,
   distanceMeters,
   estimateEtaMinutes,
   formatDistanceLabel,
   groupMessages,
+  isValidUuid,
   resolveVisibleCoordinates,
   useZonaStore,
   type ChatWallpaperTheme,
@@ -25,6 +33,13 @@ import {
 
 type MobileTab = 'chat' | 'circles' | 'map' | 'profile';
 type SheetSnap = 'peek' | 'half' | 'expanded';
+
+const STORAGE_KEY = '@zona/workspace_v1';
+
+const mobileCloudBackend = createZonaCloudBackend({
+  url: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+});
 
 const PALETTES = {
   light: {
@@ -104,6 +119,8 @@ export default function App() {
   const [dmFilter, setDmFilter] = useState<'all' | 'unread'>('all');
   const [draft, setDraft] = useState('');
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('half');
+  const [locatingGps, setLocatingGps] = useState(false);
+  const [cloudSynced, setCloudSynced] = useState(false);
 
   const {
     currentUserId,
@@ -130,12 +147,87 @@ export default function App() {
     leaveVoiceLounge,
     toggleMute,
     setMyPrivacyMode,
+    updateMyCoordinates,
     setSelectedMapUser,
     createHangoutPin,
     respondToHangout,
     unblockUser,
     deleteMyAccount,
+    hydrateSnapshot,
   } = useZonaStore();
+
+  // 1. Offline Persistence (AsyncStorage) — hydrate on launch & persist changes
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (!active || !raw) return;
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        hydrateSnapshot(parsed);
+      })
+      .catch(() => undefined);
+
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = useZonaStore.subscribe((state) => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            isAuthenticated: state.isAuthenticated,
+            profiles: state.profiles,
+            circles: state.circles,
+            channels: state.channels,
+            messages: state.messages,
+            hangoutPins: state.hangoutPins,
+            locations: state.locations,
+            blockedUserIds: state.blockedUserIds,
+            outbox: state.outbox,
+          })
+        ).catch(() => undefined);
+      }, 300);
+    });
+
+    return () => {
+      active = false;
+      if (saveTimer) clearTimeout(saveTimer);
+      unsubscribe();
+    };
+  }, [hydrateSnapshot]);
+
+  // 2. Shared Supabase Cloud Hydration & Realtime Sync (Phone <-> PC)
+  useEffect(() => {
+    if (!mobileCloudBackend.isConfigured()) return;
+    let active = true;
+    let rtSub: ReturnType<typeof mobileCloudBackend.subscribeWorkspaceChanges> = null;
+
+    mobileCloudBackend
+      .getSession()
+      .then(async (session) => {
+        if (!active || !session?.user) return;
+        const snap = await mobileCloudBackend.fetchCloudWorkspace(session.user.id);
+        if (!active) return;
+        useZonaStore.getState().hydrateCloudWorkspace(snap);
+        setCloudSynced(true);
+
+        rtSub = mobileCloudBackend.subscribeWorkspaceChanges({
+          onMessageInsert: (msg) => useZonaStore.getState().applyIncomingMessage(msg),
+          onMessageUpdate: (id, patch) => useZonaStore.getState().applyMessageUpdate(id, patch),
+          onChannelUpsert: (ch) => useZonaStore.getState().applyIncomingChannel(ch),
+          onHangoutPinUpsert: (pin) => useZonaStore.getState().applyIncomingHangoutPin(pin),
+          onHangoutRsvpUpsert: (pinId, uid, st) =>
+            useZonaStore.getState().applyIncomingHangoutRsvp(pinId, uid, st),
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+      if (rtSub && mobileCloudBackend.isConfigured()) {
+        mobileCloudBackend.getClient().removeChannel(rtSub).catch(() => undefined);
+      }
+    };
+  }, []);
 
   const c = PALETTES[theme];
   const me = profiles[currentUserId];
@@ -195,19 +287,117 @@ export default function App() {
 
   const handleSend = () => {
     if (!activeChannel || !draft.trim()) return;
-    sendTextMessage(activeChannel.id, draft);
+    const msg = sendTextMessage(activeChannel.id, draft);
     setDraft('');
+    if (cloudSynced && isValidUuid(msg.channelId)) {
+      mobileCloudBackend.sendMessage(msg).catch(() => {
+        useZonaStore.getState().queueMessageForOutbox(msg.id, msg.channelId);
+      });
+    }
+  };
+
+  // 3. Real Photo Picker for Quick Snap (expo-image-picker)
+  const handlePickQuickSnap = async () => {
+    if (!activeChannel) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Izin Galeri', 'Izinkan akses foto untuk mengirim Quick Snap.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.72,
+        base64: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      const dataUrl = asset.base64
+        ? `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`
+        : asset.uri;
+      const snapMsg = sendQuickSnap(activeChannel.id, 'Quick Snap dari ponsel', false, dataUrl);
+
+      if (cloudSynced && isValidUuid(activeChannel.id)) {
+        try {
+          let outbound = snapMsg;
+          if (dataUrl.startsWith('data:')) {
+            const converted = dataUrlToBlob(dataUrl);
+            if (converted) {
+              const signedUrl = await mobileCloudBackend.uploadMediaBlob(
+                currentUserId,
+                converted.blob,
+                converted.ext
+              );
+              outbound = { ...snapMsg, mediaUrl: signedUrl };
+              useZonaStore.getState().markMessageSynced(snapMsg.id, { mediaUrl: signedUrl });
+            }
+          }
+          await mobileCloudBackend.sendMessage(outbound);
+        } catch {
+          useZonaStore.getState().queueMessageForOutbox(snapMsg.id, snapMsg.channelId);
+        }
+      }
+    } catch {
+      sendQuickSnap(activeChannel.id, 'Snap dari ponsel');
+    }
+  };
+
+  // 4. Real Device GPS (expo-location)
+  const handleUpdateGps = async () => {
+    setLocatingGps(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Izin Lokasi', 'Aktifkan izin lokasi untuk memperbarui posisi di Peta Sosial.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      updateMyCoordinates(coords, 'Lokasi GPS Saat Ini');
+      if (cloudSynced) {
+        await mobileCloudBackend
+          .updateLocation(
+            currentUserId,
+            coords,
+            myPrivacy,
+            'Lokasi GPS Saat Ini',
+            me?.statusEmoji ?? '☕',
+            me?.statusText ?? ''
+          )
+          .catch(() => undefined);
+      }
+    } catch {
+      Alert.alert('GPS', 'Tidak dapat mengambil posisi GPS saat ini.');
+    } finally {
+      setLocatingGps(false);
+    }
   };
 
   const handleQuickHangout = () => {
-    createHangoutPin({
-      circleId: activeCircleId ?? circles[0]?.id ?? 'c-kampus',
+    const circleId = activeCircleId ?? circles[0]?.id ?? 'c-kampus';
+    const point = myLocation?.point ?? { lat: -6.2442, lng: 106.8006 };
+    const { pin, channel } = createHangoutPin({
+      circleId,
       title: 'Ngopi Sore',
       placeName: 'M Bloc Space',
       category: 'coffee',
       startsAtLabel: 'Hari ini · 18.30 WIB',
-      point: { lat: -6.2442, lng: 106.8006 },
+      point,
     });
+    if (cloudSynced && isValidUuid(circleId)) {
+      mobileCloudBackend
+        .createHangoutPin(circleId, pin.title, pin.placeName, point)
+        .then((res) => {
+          useZonaStore.getState().replaceEntityId('pin', pin.id, res.pin_id);
+          useZonaStore.getState().replaceEntityId('channel', channel.id, res.channel_id);
+        })
+        .catch(() => undefined);
+    }
     setTab('chat');
     setInThread(true);
   };
@@ -413,6 +603,19 @@ export default function App() {
                         {sender.displayName}
                       </Text>
                     )}
+                    {message.type === 'quick_snap' && message.mediaUrl && (
+                      <Image
+                        source={{ uri: message.mediaUrl }}
+                        style={{
+                          width: 196,
+                          height: 248,
+                          borderRadius: 12,
+                          marginBottom: 6,
+                          backgroundColor: '#111827',
+                        }}
+                        resizeMode="cover"
+                      />
+                    )}
                     <Text
                       style={[
                         styles.msgText,
@@ -430,7 +633,14 @@ export default function App() {
                               styles.rsvpBtn,
                               { backgroundColor: CATEGORY_COLORS[pin.category ?? 'coffee'] },
                             ]}
-                            onPress={() => respondToHangout(pin.id, status)}
+                            onPress={() => {
+                              respondToHangout(pin.id, status);
+                              if (cloudSynced && isValidUuid(pin.id)) {
+                                void mobileCloudBackend
+                                  .upsertHangoutRsvp(pin.id, currentUserId, status)
+                                  .catch(() => undefined);
+                              }
+                            }}
                           >
                             <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
                               {status === 'going' ? 'Ikut' : status === 'otw' ? 'OTW' : 'Nanti'}
@@ -456,7 +666,7 @@ export default function App() {
           <View style={[styles.composer, { borderTopColor: c.hairline, backgroundColor: c.glass }]}>
             <TouchableOpacity
               style={[styles.composerAction, { backgroundColor: c.input }]}
-              onPress={() => sendQuickSnap(activeChannel.id, 'Snap dari ponsel')}
+              onPress={handlePickQuickSnap}
             >
               <Text style={{ color: c.textSecondary, fontWeight: '600', fontSize: 13 }}>Snap</Text>
             </TouchableOpacity>
@@ -590,7 +800,21 @@ export default function App() {
                     styles.privacyPillBtn,
                     myPrivacy === mode && { backgroundColor: activeAccent },
                   ]}
-                  onPress={() => setMyPrivacyMode(mode)}
+                  onPress={() => {
+                    setMyPrivacyMode(mode);
+                    if (cloudSynced && myLocation) {
+                      void mobileCloudBackend
+                        .updateLocation(
+                          currentUserId,
+                          myLocation.point,
+                          mode,
+                          myLocation.areaLabel,
+                          myLocation.activityEmoji,
+                          myLocation.activityText
+                        )
+                        .catch(() => undefined);
+                    }
+                  }}
                 >
                   <Text
                     style={{
@@ -646,6 +870,24 @@ export default function App() {
               );
             })}
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.mapFab,
+              {
+                bottom: 204,
+                backgroundColor: c.glass,
+                borderWidth: 1,
+                borderColor: c.hairline,
+              },
+            ]}
+            onPress={handleUpdateGps}
+            disabled={locatingGps}
+          >
+            <Text style={{ color: c.textPrimary, fontSize: 11, fontWeight: '700' }}>
+              {locatingGps ? '...' : 'GPS'}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.mapFab, { backgroundColor: activeAccent }]}
@@ -723,6 +965,17 @@ export default function App() {
                 @{me.username} · {me.statusText}
               </Text>
             </View>
+          </View>
+
+          <View style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.elevated }]}>
+            <Text style={[styles.rowTitle, { color: c.textPrimary }]}>Sinkronisasi Cloud</Text>
+            <Text style={{ color: cloudSynced ? activeAccent : c.textMuted, fontWeight: '600', fontSize: 12.5 }}>
+              {cloudSynced
+                ? 'Supabase Realtime Aktif'
+                : mobileCloudBackend.isConfigured()
+                  ? 'Siap Login Cloud'
+                  : 'Mode Lokal (Offline)'}
+            </Text>
           </View>
 
           <TouchableOpacity

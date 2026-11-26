@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link2, Plus, Users, X } from 'lucide-react';
 import { useZonaStore } from '@zona/shared';
+import { zonaCloudSync } from '../services/cloudSync';
 
 interface CircleManageModalProps {
   onClose: () => void;
@@ -21,13 +22,25 @@ export function CircleManageModal({ onClose, onNotify }: CircleManageModalProps)
     e.preventDefault();
     if (!name.trim()) return;
     const circle = createCircle(name, shortCode);
+    const defaultChannelId = useZonaStore.getState().activeChannelId;
+    void zonaCloudSync.syncCreateCircle(circle, defaultChannelId);
     onNotify(`Circle "${circle.name}" dibuat (${circle.inviteCode}).`);
     onClose();
   };
 
-  const handleJoin = (e: React.FormEvent) => {
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (zonaCloudSync.isActive()) {
+      const cloudRes = await zonaCloudSync.syncJoinCircle(inviteCode);
+      if (!cloudRes.ok) {
+        setError(cloudRes.error ?? 'Kode undangan tidak ditemukan.');
+        return;
+      }
+      onNotify(`Bergabung ke Circle (${inviteCode.toUpperCase()}).`);
+      onClose();
+      return;
+    }
     const res = joinCircleByCode(inviteCode);
     if (!res.ok) {
       setError(res.error ?? 'Kode undangan tidak valid.');

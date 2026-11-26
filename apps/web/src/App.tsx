@@ -10,7 +10,6 @@ import {
   Volume2,
 } from 'lucide-react';
 import {
-  createZonaCloudBackend,
   useZonaStore,
   type Coordinates,
   type Message,
@@ -29,6 +28,7 @@ import {
   loadWorkspaceSnapshot,
   saveWorkspaceSnapshot,
 } from './services/offlineDb';
+import { webCloudBackend, zonaCloudSync } from './services/cloudSync';
 import { zonaVoiceEngine } from './services/livekitVoice';
 
 type MobileTab = 'chat' | 'circles' | 'map' | 'profile';
@@ -80,8 +80,10 @@ export function App() {
   });
 
   const isAuthenticated = useZonaStore((s) => s.isAuthenticated);
+  const backendMode = useZonaStore((s) => s.backendMode);
   const chatTheme = useZonaStore((s) => s.chatTheme);
   const activeCircleId = useZonaStore((s) => s.activeCircleId);
+  const activeChannelId = useZonaStore((s) => s.activeChannelId);
   const activeVoiceLoungeId = useZonaStore((s) => s.activeVoiceLoungeId);
   const isMuted = useZonaStore((s) => s.isMuted);
   const circles = useZonaStore((s) => s.circles);
@@ -95,15 +97,7 @@ export function App() {
 
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
   const activeCircle = circles.find((c) => c.id === activeCircleId);
-
-  const cloudBackend = useMemo(
-    () =>
-      createZonaCloudBackend({
-        url: import.meta.env.VITE_SUPABASE_URL,
-        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      }),
-    []
-  );
+  const cloudBackend = webCloudBackend;
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -122,19 +116,29 @@ export function App() {
     }
   }, [activeVoiceLoungeId, voiceStageOpen]);
 
-  // Hydrate Dexie offline workspace & subscribe to persist updates
+  // Hydrate Dexie offline workspace, restore Cloud OAuth session, & subscribe to local persistence
   useEffect(() => {
     let active = true;
-    loadWorkspaceSnapshot<Record<string, unknown>>().then((snap) => {
+    loadWorkspaceSnapshot<Record<string, unknown>>().then(async (snap) => {
       if (active && snap) {
         hydrateSnapshot(snap);
+      }
+      if (active) {
+        await zonaCloudSync.restoreSessionIfPresent();
       }
       const params = new URLSearchParams(window.location.search);
       const invite = params.get('invite');
       if (active && invite) {
-        const res = joinCircleByCode(invite);
-        if (res.ok && res.circle) {
-          notify(`Bergabung ke Circle "${res.circle.name}".`);
+        if (zonaCloudSync.isActive()) {
+          const cloudRes = await zonaCloudSync.syncJoinCircle(invite);
+          if (cloudRes.ok) {
+            notify(`Bergabung ke Circle (${invite}).`);
+          }
+        } else {
+          const res = joinCircleByCode(invite);
+          if (res.ok && res.circle) {
+            notify(`Bergabung ke Circle "${res.circle.name}".`);
+          }
         }
       }
     });
@@ -160,11 +164,48 @@ export function App() {
     };
   }, [hydrateSnapshot, joinCircleByCode, notify]);
 
+  // Activate Supabase Cloud hydration + Realtime + Outbox flush whenever authenticated in Cloud mode
+  useEffect(() => {
+    if (!isAuthenticated || backendMode !== 'cloud' || !cloudBackend.isConfigured()) {
+      zonaCloudSync.stopRealtime();
+      return;
+    }
+
+    let active = true;
+    zonaCloudSync.hydrateFromCloud().then(() => {
+      if (!active) return;
+      zonaCloudSync.startRealtime();
+      zonaCloudSync.watchChannelPresence(useZonaStore.getState().activeChannelId);
+      void zonaCloudSync.flushPendingOutbox();
+    });
+
+    return () => {
+      active = false;
+      zonaCloudSync.stopRealtime();
+    };
+  }, [isAuthenticated, backendMode, cloudBackend]);
+
+  // Subscribe to per-channel Supabase Presence for real typing indicators
+  useEffect(() => {
+    if (isAuthenticated && backendMode === 'cloud' && activeChannelId) {
+      zonaCloudSync.watchChannelPresence(activeChannelId);
+    }
+  }, [isAuthenticated, backendMode, activeChannelId]);
+
   // Track online/offline state for offline-first outbox flushing
   useEffect(() => {
-    const onOnline = () => {
+    const onOnline = async () => {
       setOnlineStatus(true);
-      notify('Kembali online — pesan tersinkronisasi.');
+      if (zonaCloudSync.isActive()) {
+        const flushed = await zonaCloudSync.flushPendingOutbox();
+        notify(
+          flushed > 0
+            ? `Kembali online — ${flushed} pesan tertunda terkirim.`
+            : 'Kembali online — pesan tersinkronisasi.'
+        );
+      } else {
+        notify('Kembali online — pesan tersinkronisasi.');
+      }
     };
     const onOffline = () => {
       setOnlineStatus(false);
@@ -482,7 +523,7 @@ export function App() {
           onClose={() => setHangoutModal((m) => ({ ...m, open: false }))}
           onConfirm={({ placeName, title, startsAtLabel, category, coords }) => {
             const targetCircleId = activeCircleId ?? circles[0]?.id ?? 'c-kampus';
-            const { pin } = createHangoutPin({
+            const { pin, channel } = createHangoutPin({
               circleId: targetCircleId,
               title,
               placeName,
@@ -490,6 +531,7 @@ export function App() {
               category,
               point: coords,
             });
+            void zonaCloudSync.syncCreateHangoutPin(pin, channel);
             setHangoutModal((m) => ({ ...m, open: false }));
             setHighlightedPinId(pin.id);
             setFullMapMode(false);

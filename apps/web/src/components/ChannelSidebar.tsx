@@ -28,6 +28,7 @@ import {
   type ZonaCloudBackend,
 } from '@zona/shared';
 import { Avatar } from './Avatar';
+import { zonaCloudSync } from '../services/cloudSync';
 import { zonaVoiceEngine, type AudioDeviceInfo } from '../services/livekitVoice';
 
 interface ChannelSidebarProps {
@@ -198,7 +199,8 @@ export function ChannelSidebar({
   const handleCreateChannel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCircle || !newChannelName.trim()) return;
-    createChannel(activeCircle.id, newChannelName);
+    const ch = createChannel(activeCircle.id, newChannelName);
+    void zonaCloudSync.syncCreateChannel(ch);
     setNewChannelName('');
     setAddingChannel(false);
     onNotify('Kanal baru dibuat.');
@@ -222,14 +224,24 @@ export function ChannelSidebar({
       return;
     }
     joinVoiceLounge(loungeId);
+    const lounge = voiceLounges.find((v) => v.id === loungeId);
+    const { backendMode, setVoiceSpeakingUsers } = useZonaStore.getState();
     const res = await zonaVoiceEngine.connect({
       roomName: loungeId,
+      circleId: lounge?.circleId ?? activeCircle?.id,
       participantName: me?.displayName ?? 'Anggota',
+      backendMode,
       cloudBackend,
+      onActiveSpeakers: (identities) => {
+        setVoiceSpeakingUsers(loungeId, identities);
+      },
+      onDisconnected: () => {
+        leaveVoiceLounge();
+      },
     });
     onNotify(
       res.mode === 'livekit'
-        ? `Terhubung ke ruang suara ${loungeName}`
+        ? `Terhubung ke ruang suara LiveKit ${loungeName}`
         : `Bergabung ke ${loungeName}`
     );
   };
