@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Image as ImageIcon, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Camera, Image as ImageIcon, RefreshCw, X } from 'lucide-react';
 import { captureVideoFrame, compressImageFile } from '../services/mediaTools';
 
 interface QuickSnapModalProps {
@@ -32,7 +32,7 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
     setCameraError(null);
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Kamera tidak tersedia di perangkat/browser ini.');
+        throw new Error('Kamera tidak tersedia di perangkat ini.');
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1080 } },
@@ -48,7 +48,9 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
       });
     } catch (err) {
       setCameraError(
-        err instanceof Error ? err.message : 'Izin kamera ditolak. Kamu tetap bisa pilih foto dari galeri.'
+        err instanceof Error
+          ? err.message
+          : 'Izin kamera tidak diberikan. Pilih foto dari galeri sebagai alternatif.'
       );
     }
   };
@@ -77,7 +79,7 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
       setPreviewUrl(dataUrl);
       stopCamera();
     } catch {
-      setCameraError('Gagal memproses file foto.');
+      setCameraError('Gagal memproses gambar.');
     } finally {
       setBusy(false);
     }
@@ -86,7 +88,7 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSend({
-      caption: caption.trim() || 'Momen spontan • 24 jam',
+      caption: caption.trim() || 'Momen spontan · 24 jam',
       viewOnce,
       mediaUrl: previewUrl,
     });
@@ -101,61 +103,60 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
       >
-        <div className="map-header-row">
+        <div className="modal-head">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sparkles size={18} color="var(--accent-yellow)" />
-            <h3>Kirim Quick Snap</h3>
+            <Camera size={18} strokeWidth={1.75} color="var(--accent)" />
+            <h3>Quick Snap</h3>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose}>
-            <X size={16} />
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Tutup">
+            <X size={17} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="snap-capture-stage">
+        <div className="snap-stage">
           {previewUrl ? (
-            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-              <img src={previewUrl} alt="Preview Quick Snap" className="snap-preview-img" />
+            <>
+              <img src={previewUrl} alt="Pratinjau foto" className="snap-preview-media" />
               <button
                 type="button"
-                className="pill-action"
-                style={{ position: 'absolute', top: 10, right: 10 }}
+                className="map-glass-pill"
+                style={{ position: 'absolute', top: 10, right: 10, height: 32 }}
                 onClick={() => setPreviewUrl(undefined)}
               >
-                <RefreshCw size={12} /> Ganti
+                <RefreshCw size={13} strokeWidth={1.75} />
+                <span>Ganti</span>
               </button>
-            </div>
+            </>
           ) : cameraActive ? (
-            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-              <video ref={videoRef} playsInline muted className="snap-preview-img" />
+            <>
+              <video ref={videoRef} playsInline muted className="snap-preview-media" />
               <button
                 type="button"
                 className="shutter-btn"
                 onClick={handleCapture}
                 disabled={busy}
-                aria-label="Ambil Foto"
+                aria-label="Ambil foto"
               />
-            </div>
+            </>
           ) : (
-            <div className="snap-empty-picker">
-              <button
-                type="button"
-                className="pill-action primary"
-                onClick={handleStartCamera}
-              >
-                <Camera size={14} /> Buka Kamera
-              </button>
-              <label className="pill-action" style={{ cursor: 'pointer' }}>
-                <ImageIcon size={14} /> Pilih dari Galeri
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={handleFilePick}
-                />
-              </label>
-              <span className="channel-meta">
-                Foto otomatis dikompresi ringan &amp; kedaluwarsa 24 jam.
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 16 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn-primary" onClick={handleStartCamera}>
+                  <Camera size={15} strokeWidth={1.75} />
+                  <span>Kamera</span>
+                </button>
+                <label className="btn-secondary" style={{ cursor: 'pointer' }}>
+                  <ImageIcon size={15} strokeWidth={1.75} />
+                  <span>Galeri</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleFilePick}
+                  />
+                </label>
+              </div>
+              <span className="meta-text">Foto otomatis hilang setelah 24 jam.</span>
             </div>
           )}
         </div>
@@ -163,10 +164,10 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
         {cameraError && <div className="inline-error">{cameraError}</div>}
 
         <label className="field-label">
-          Caption Momen
+          Keterangan
           <input
             className="field-input"
-            placeholder="Mis: Kopi susu udah nyampe, buruan!"
+            placeholder="Tambahkan keterangan singkat"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
           />
@@ -177,8 +178,9 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            fontSize: 13,
+            fontSize: 13.5,
             color: 'var(--text-secondary)',
+            cursor: 'pointer',
           }}
         >
           <input
@@ -186,15 +188,15 @@ export function QuickSnapModal({ onClose, onSend }: QuickSnapModalProps) {
             checked={viewOnce}
             onChange={(e) => setViewOnce(e.target.checked)}
           />
-          Aktifkan mode Sekali Lihat (View Once)
+          <span>Sekali lihat (View Once)</span>
         </label>
 
         <div className="modal-actions">
-          <button type="button" className="pill-action" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={onClose}>
             Batal
           </button>
-          <button type="submit" className="pill-action primary" disabled={busy}>
-            {busy ? 'Memproses...' : 'Kirim Snap'}
+          <button type="submit" className="btn-primary" disabled={busy}>
+            {busy ? 'Memproses...' : 'Kirim'}
           </button>
         </div>
       </form>

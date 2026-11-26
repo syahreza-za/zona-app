@@ -1,46 +1,42 @@
-# ZONA — Chat × Circles × Live Social Map
+# ZONA
 
-Aplikasi **Social Hangout & Circle Messenger** lintas platform yang menggabungkan:
-1. **Kecepatan Chat WhatsApp** (*offline-first*, balasan cepat, *voice note*, reaksi emoji),
-2. **Circles & Voice Lounge ala Discord Lite** (kanal topik rapi + masuk ruang suara 1-tap via LiveKit WebRTC),
-3. **UI Ekspresif & Live Social Map ala Snapchat** (avatar hidup, 3 mode privasi `Tepat / Area / Ghost`, *Quick Snap* 24 jam, dan fitur **Pin Ajak Kumpul → Auto Channel**).
+Aplikasi komunikasi dan hangout lintas platform untuk circle pertemanan dekat — menggabungkan kecepatan chat harian, struktur Circle & Voice Lounge, dan Peta Sosial dengan kontrol privasi server-side.
 
-## Dukungan 4 OS + Web (1 Monorepo)
-| Platform | Paket | Status |
-| :--- | :--- | :--- |
-| **Web PWA (Windows & macOS PC)** | [`apps/web`](apps/web) — Vite + React + MapLibre GL + PWA | Siap jalan (**Mode Demo Lokal** aktif bawaan) |
-| **Desktop Native (macOS `.dmg` & Windows `.exe`)** | [`apps/desktop`](apps/desktop) — Tauri v2 (~10 MB) membungkus `apps/web` | Siap build lokal / GitHub Actions |
-| **iPhone (iOS) & Android** | [`apps/mobile`](apps/mobile) — Expo React Native berbagi `@zona/shared` | Siap `expo start` / EAS Build |
-| **Shared Core Logic** | [`packages/shared`](packages/shared) — Types, Zustand Store, Fuzzy Map Privacy Math | 100% teruji unit test (`vitest`) |
-| **Cloud Backend** | [`supabase/`](supabase) — PostgreSQL + PostGIS + RLS + Edge Function LiveKit | Siap `supabase db push` |
+## Platform & Struktur Monorepo (`pnpm` workspaces)
 
----
+| Paket | Platform & Teknologi |
+| :--- | :--- |
+| [`packages/shared`](packages/shared) | Core types, Zustand state, message grouping, spatial map clustering, deterministic fuzzy privacy (`exact`/`fuzzy`/`ghost`), dan Supabase client |
+| [`apps/web`](apps/web) | Web App & PWA (Vite + React + TypeScript + Vanilla CSS Design Tokens Light & Dark + Dexie IndexedDB + MapLibre GL + LiveKit WebRTC) |
+| [`apps/desktop`](apps/desktop) | Tauri v2 wrapper untuk installer native macOS (`.dmg`) & Windows (`.exe`/`.msi`) + GitHub Actions matrix build |
+| [`apps/mobile`](apps/mobile) | Expo Development Build (React Native + TypeScript, 4-tab native navigation, Light & Dark parity, floating voice pill) |
+| [`supabase/`](supabase) | PostgreSQL + PostGIS + RLS + Edge Functions (`livekit-token`, `send-push`) + `pg_cron` 24h cleanup + permanent account deletion RPC |
 
-## Menjalankan Secara Lokal (Mode Demo Tanpa Kredensial)
+## Menjalankan Secara Lokal
 
 ```bash
 pnpm install
 
-# 1. Jalankan versi Web PWA (PC Windows/macOS & browser mobile)
+# Web PWA (Desktop & Mobile Browser)
 pnpm dev:web
 
-# 2. Jalankan versi Mobile (iPhone & Android lewat Expo)
+# Mobile (iOS & Android via Expo)
 pnpm dev:mobile
 
-# 3. Jalankan versi Desktop Native (macOS / Windows — butuh Rust toolchain)
+# Desktop Native (macOS / Windows — membutuhkan Rust toolchain)
 pnpm dev:desktop
 
-# Verifikasi TypeScript, unit tests, dan production web bundle
+# Verifikasi menyeluruh
 pnpm typecheck
 pnpm test
 pnpm build:web
 ```
 
-## Build Installer Desktop (macOS & Windows)
-* **Otomatis lewat GitHub Actions:** Buka tab **Actions** → **CI & Cross-Platform Builds** → klik **Run workflow** untuk menghasilkan installer `.dmg` (macOS) dan `.exe`/`.msi` (Windows) tanpa perlu memiliki kedua PC sekaligus.
-* **Lokal:** Jalankan `pnpm build:desktop` di mesin macOS (untuk `.dmg`) atau Windows (untuk `.exe`/`.msi`).
+## Menghubungkan ke Supabase & LiveKit Produksi
 
-## Menghubungkan ke Supabase & LiveKit Asli
-1. Salin `.env.example` ke `apps/web/.env.local` dan `apps/mobile/.env.local`, ubah `DEMO_MODE=false` lalu isi kredensial Supabase & LiveKit.
-2. Terapkan skema database & fungsi PostGIS dari `supabase/migrations/0001_initial_schema.sql`.
-3. Deploy Edge Function `supabase/functions/livekit-token/index.ts` dan set secrets `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`.
+1. Salin `.env.example` ke `apps/web/.env.local` dan `apps/mobile/.env.local`, lalu isi `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, dan `VITE_LIVEKIT_URL`.
+2. Jalankan migrasi SQL secara berurutan:
+   - `supabase/migrations/0001_initial_schema.sql`
+   - `supabase/migrations/0002_storage_and_safety.sql`
+   - `supabase/migrations/0003_delete_account_push_and_cron.sql`
+3. Deploy Edge Functions `supabase/functions/livekit-token` dan `supabase/functions/send-push`, lalu atur secrets `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL`, dan `FCM_SERVER_KEY`.

@@ -1,35 +1,32 @@
 import { useState } from 'react';
-import { Cloud, Compass, Headphones, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, Camera, Mail } from 'lucide-react';
 import { useZonaStore, type ZonaCloudBackend } from '@zona/shared';
+import { Avatar } from './Avatar';
+import { compressImageFile } from '../services/mediaTools';
 
 interface AuthOnboardingProps {
   cloudBackend: ZonaCloudBackend;
   onNotify: (msg: string) => void;
 }
 
-const AVATAR_COLORS = ['#FACC15', '#22C55E', '#F97316', '#06B6D4', '#EC4899', '#38BDF8'];
-const STATUS_PRESETS = [
-  { emoji: '⚡', text: 'Lagi online di ZONA' },
-  { emoji: '☕', text: 'Siap diajak ngopi' },
-  { emoji: '🎧', text: 'Nongkrong di Voice' },
-  { emoji: '🛵', text: 'Lagi di jalan' },
-];
+const AVATAR_COLORS = ['#10B981', '#2563EB', '#EA580C', '#0891B2', '#E11D48', '#475569'];
 
 export function AuthOnboarding({ cloudBackend, onNotify }: AuthOnboardingProps) {
   const completeOnboarding = useZonaStore((s) => s.completeOnboarding);
-
   const cloudReady = cloudBackend.isConfigured();
-  const [tab, setTab] = useState<'quick' | 'cloud'>(cloudReady ? 'cloud' : 'quick');
+
+  const [step, setStep] = useState<1 | 2>(1);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pendingUserId, setPendingUserId] = useState<string | undefined>(undefined);
+  const [pendingMode, setPendingMode] = useState<'cloud' | 'demo'>('demo');
 
   const [displayName, setDisplayName] = useState('Reza');
   const [username, setUsername] = useState('syahreza');
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
-  const [statusEmoji, setStatusEmoji] = useState(STATUS_PRESETS[0].emoji);
-  const [statusText, setStatusText] = useState(STATUS_PRESETS[0].text);
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,265 +39,301 @@ export function AuthOnboarding({ cloudBackend, onNotify }: AuthOnboardingProps) 
       .slice(0, 2)
       .toUpperCase() || 'ZN';
 
-  const handleQuickStart = (e: React.FormEvent) => {
-    e.preventDefault();
-    completeOnboarding({
-      displayName,
-      username,
-      avatarColor,
-      statusEmoji,
-      statusText,
-      mode: 'demo',
-    });
-    onNotify(`Selamat datang, ${displayName}! Mode Offline-First aktif.`);
-  };
-
-  const handleCloudAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOAuth = async (provider: 'google' | 'apple') => {
     setError(null);
     if (!cloudReady) {
-      setError('Kredensial Supabase belum diisi di .env.local. Gunakan tab Masuk Cepat (Offline/Demo) untuk langsung mencoba.');
+      setPendingMode('demo');
+      setStep(2);
       return;
     }
+    setLoading(true);
+    try {
+      if (provider === 'google') {
+        await cloudBackend.signInWithGoogle(window.location.origin);
+      } else {
+        await cloudBackend.signInWithApple(window.location.origin);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal melanjutkan autentikasi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailContinue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!cloudReady) {
+      const localName = email.split('@')[0] || 'Reza';
+      setDisplayName(localName.charAt(0).toUpperCase() + localName.slice(1));
+      setUsername(localName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'syahreza');
+      setPendingMode('demo');
+      setStep(2);
+      return;
+    }
+
     setLoading(true);
     try {
       const res =
         authMode === 'signup'
           ? await cloudBackend.signUpWithEmail(email, password, displayName, username)
           : await cloudBackend.signInWithEmail(email, password);
-
-      completeOnboarding({
-        displayName,
-        username,
-        avatarColor,
-        statusEmoji,
-        statusText,
-        mode: 'cloud',
-        userId: res.user?.id,
-      });
-      onNotify('Berhasil terhubung ke Supabase Cloud!');
+      setPendingUserId(res.user?.id);
+      setPendingMode('cloud');
+      setStep(2);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal masuk ke akun Cloud.');
+      setError(err instanceof Error ? err.message : 'Email atau kata sandi tidak valid.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { dataUrl } = await compressImageFile(file, 360);
+      setAvatarUrl(dataUrl);
+    } catch {
+      setError('Gagal memuat foto profil.');
+    }
+  };
+
+  const handleFinishProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    completeOnboarding({
+      displayName,
+      username,
+      avatarColor,
+      avatarUrl,
+      statusEmoji: '☕',
+      statusText: 'Lagi santai di Blok M',
+      mode: pendingMode,
+      userId: pendingUserId,
+    });
+    onNotify(`Selamat datang, ${displayName}.`);
+  };
+
   return (
     <div className="auth-screen">
-      <div className="auth-grid">
-        <section className="auth-hero">
-          <div className="brand-mark" style={{ width: 52, height: 52, fontSize: 24 }}>
-            Z
+      <section className="auth-card" aria-label="Masuk ke ZONA">
+        <div className="auth-brand-row">
+          <div className="auth-logo-mark">Z</div>
+          <div>
+            <h1 className="auth-title">{step === 1 ? 'Masuk ke ZONA' : 'Lengkapi Profil'}</h1>
+            <p className="auth-sub">
+              {step === 1
+                ? 'Langkah 1 dari 2 · Pilih metode masuk'
+                : 'Langkah 2 dari 2 · Atur nama dan foto profilmu'}
+            </p>
           </div>
-          <h1 className="auth-heading">ZONA</h1>
-          <p className="auth-tagline">
-            Satu ruang untuk circle terdekatmu: chat secepat WhatsApp, ruang suara 1-tap
-            ala Discord, dan peta sosial hidup ala Snapchat.
-          </p>
+        </div>
 
-          <div className="auth-pillars">
-            <div className="auth-pillar">
-              <MessageCircle size={18} color="var(--accent-yellow)" />
-              <div>
-                <strong>Offline-First Fast Chat</strong>
-                <span>Pesan, Voice Note asli, &amp; Quick Snap 24 jam tetap lancar.</span>
-              </div>
+        {step === 1 ? (
+          <>
+            <div className="oauth-stack">
+              <button
+                id="btn-auth-google"
+                type="button"
+                className="oauth-btn"
+                onClick={() => handleOAuth('google')}
+                disabled={loading}
+              >
+                <span>Lanjutkan dengan Google</span>
+              </button>
+              <button
+                id="btn-auth-apple"
+                type="button"
+                className="oauth-btn"
+                onClick={() => handleOAuth('apple')}
+                disabled={loading}
+              >
+                <span>Lanjutkan dengan Apple</span>
+              </button>
             </div>
-            <div className="auth-pillar">
-              <Headphones size={18} color="var(--accent-emerald)" />
-              <div>
-                <strong>Circles &amp; Drop-In Voice</strong>
-                <span>Kanal topik rapi tanpa ribet setting server dan masuk voice 1-tap.</span>
-              </div>
-            </div>
-            <div className="auth-pillar">
-              <Compass size={18} color="var(--accent-coral)" />
-              <div>
-                <strong>Live Map dengan Privasi Penuh</strong>
-                <span>Pilih mode Tepat, Area (~400m), atau Ghost Mode kapan saja.</span>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        <section className="auth-card">
-          <div className="privacy-segment" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            <button
-              type="button"
-              className={`privacy-btn ${tab === 'quick' ? 'active fuzzy' : ''}`}
-              onClick={() => setTab('quick')}
+            <div className="divider-text">atau dengan email</div>
+
+            <form
+              onSubmit={handleEmailContinue}
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
             >
-              <Sparkles size={13} />
-              <span>Masuk Cepat</span>
-            </button>
-            <button
-              type="button"
-              className={`privacy-btn ${tab === 'cloud' ? 'active exact' : ''}`}
-              onClick={() => setTab('cloud')}
+              <label className="field-label">
+                Email
+                <input
+                  type="email"
+                  className="field-input"
+                  placeholder="nama@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required={cloudReady}
+                />
+              </label>
+
+              <label className="field-label">
+                Kata Sandi
+                <input
+                  type="password"
+                  className="field-input"
+                  placeholder="Minimal 6 karakter"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={cloudReady ? 6 : undefined}
+                  required={cloudReady}
+                />
+              </label>
+
+              {error && <div className="inline-error">{error}</div>}
+
+              <button
+                id="btn-auth-email"
+                type="submit"
+                className="btn-primary"
+                disabled={loading}
+                style={{ width: '100%', marginTop: 2 }}
+              >
+                <Mail size={16} strokeWidth={1.75} />
+                <span>
+                  {loading
+                    ? 'Memproses...'
+                    : authMode === 'signin'
+                      ? 'Masuk'
+                      : 'Buat Akun'}
+                </span>
+              </button>
+            </form>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+              }}
             >
-              <Cloud size={13} />
-              <span>Cloud Supabase</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                style={{ color: 'var(--accent)', fontWeight: 500 }}
+                onClick={() => setAuthMode((m) => (m === 'signin' ? 'signup' : 'signin'))}
+              >
+                {authMode === 'signin' ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Masuk'}
+              </button>
 
-          <div className="profile-preview-bar">
-            <div className="avatar" style={{ background: avatarColor, width: 46, height: 46, fontSize: 16 }}>
-              {initials}
-              <span className="avatar-dot" />
+              {!cloudReady && (
+                <button
+                  id="btn-enter-zona"
+                  type="button"
+                  style={{
+                    color: 'var(--text-primary)',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  onClick={() => setStep(2)}
+                >
+                  <span>Lewati</span>
+                  <ArrowRight size={14} strokeWidth={1.75} />
+                </button>
+              )}
             </div>
-            <div style={{ minWidth: 0 }}>
-              <strong style={{ display: 'block', fontSize: 15 }}>{displayName || 'Pengguna Baru'}</strong>
-              <span className="channel-meta">
-                @{username || 'username'} · {statusEmoji} {statusText}
-              </span>
-            </div>
-          </div>
-
+          </>
+        ) : (
           <form
-            onSubmit={tab === 'quick' ? handleQuickStart : handleCloudAuth}
-            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+            onSubmit={handleFinishProfile}
+            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           >
-            {tab === 'cloud' && (
-              <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Avatar
+                initials={initials}
+                color={avatarColor}
+                avatarUrl={avatarUrl}
+                size="lg"
+                online
+                showPresence
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label className="btn-secondary" style={{ height: 32, fontSize: 12.5, cursor: 'pointer' }}>
+                  <Camera size={14} strokeWidth={1.75} />
+                  <span>Unggah Foto</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleAvatarUpload}
+                  />
+                </label>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    className={`pill-action ${authMode === 'signin' ? 'primary' : ''}`}
-                    onClick={() => setAuthMode('signin')}
-                  >
-                    Masuk
-                  </button>
-                  <button
-                    type="button"
-                    className={`pill-action ${authMode === 'signup' ? 'primary' : ''}`}
-                    onClick={() => setAuthMode('signup')}
-                  >
-                    Daftar Baru
-                  </button>
+                  {AVATAR_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={`Warna ${c}`}
+                      onClick={() => {
+                        setAvatarUrl(undefined);
+                        setAvatarColor(c);
+                      }}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 99,
+                        background: c,
+                        outline: !avatarUrl && avatarColor === c ? '2px solid var(--text-primary)' : 'none',
+                        outlineOffset: 2,
+                      }}
+                    />
+                  ))}
                 </div>
-
-                <label className="field-label">
-                  Email
-                  <input
-                    type="email"
-                    className="field-input"
-                    placeholder="nama@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </label>
-
-                <label className="field-label">
-                  Kata Sandi
-                  <input
-                    type="password"
-                    className="field-input"
-                    placeholder="Minimal 6 karakter"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    minLength={6}
-                    required
-                  />
-                </label>
-              </>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <label className="field-label">
-                Nama Tampilan
-                <input
-                  id="onboarding-display-name"
-                  className="field-input"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="field-label">
-                Username
-                <input
-                  id="onboarding-username"
-                  className="field-input"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
-              </label>
-            </div>
-
-            <div className="field-label">
-              Warna Avatar
-              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                {AVATAR_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-label={`Pilih warna ${c}`}
-                    onClick={() => setAvatarColor(c)}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 10,
-                      background: c,
-                      outline: avatarColor === c ? '2px solid var(--text-primary)' : 'none',
-                      outlineOffset: 2,
-                    }}
-                  />
-                ))}
               </div>
             </div>
 
-            <div className="field-label">
-              Status Awal di Peta
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-                {STATUS_PRESETS.map((preset) => (
-                  <button
-                    key={preset.text}
-                    type="button"
-                    className={`pill-action ${statusText === preset.text ? 'primary' : ''}`}
-                    onClick={() => {
-                      setStatusEmoji(preset.emoji);
-                      setStatusText(preset.text);
-                    }}
-                  >
-                    {preset.emoji} {preset.text}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <label className="field-label">
+              Nama Tampilan
+              <input
+                id="onboarding-display-name"
+                className="field-input"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+
+            <label className="field-label">
+              Username
+              <input
+                id="onboarding-username"
+                className="field-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </label>
 
             {error && <div className="inline-error">{error}</div>}
 
-            <button
-              id="btn-enter-zona"
-              type="submit"
-              className="send-btn"
-              style={{ justifyContent: 'center', height: 44, marginTop: 4 }}
-              disabled={loading}
-            >
-              {loading
-                ? 'Menghubungkan...'
-                : tab === 'quick'
-                  ? 'Masuk ke ZONA Sekarang'
-                  : authMode === 'signup'
-                    ? 'Daftar & Masuk Cloud'
-                    : 'Masuk dengan Supabase'}
-            </button>
-
-            <div className="auth-footnote">
-              <ShieldCheck size={14} />
-              <span>
-                {cloudReady
-                  ? 'Supabase Cloud aktif & siap sinkronisasi real-time.'
-                  : 'Mode Lokal/Demo menyimpan data di IndexedDB perangkatmu secara offline.'}
-              </span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setStep(1)}
+              >
+                Kembali
+              </button>
+              <button
+                id="btn-finish-onboarding"
+                type="submit"
+                className="btn-primary"
+                style={{ flex: 1 }}
+              >
+                <span>Mulai Menggunakan ZONA</span>
+              </button>
             </div>
           </form>
-        </section>
-      </div>
+        )}
+      </section>
     </div>
   );
 }

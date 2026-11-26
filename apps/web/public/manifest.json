@@ -1,11 +1,11 @@
 {
-  "name": "ZONA — Chat, Circles & Live Map",
+  "name": "ZONA",
   "short_name": "ZONA",
-  "description": "Chat secepat WhatsApp, Circles & Voice Lounge ala Discord, dan Live Social Map ala Snapchat.",
+  "description": "Komunikasi harian, circle pertemanan, ruang suara, dan peta sosial.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0E1014",
-  "theme_color": "#0E1014",
+  "background_color": "#FFFFFF",
+  "theme_color": "#10B981",
   "icons": [
     {
       "src": "/icon.svg",

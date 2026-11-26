@@ -14,9 +14,11 @@ import type {
   BackendMode,
   Channel,
   Circle,
+  CircleRole,
   Coordinates,
   HangoutPin,
   Message,
+  ModerationReport,
   OutboxRecord,
   PrivacyMode,
   Profile,
@@ -39,6 +41,7 @@ export interface ZonaState {
   hangoutPins: HangoutPin[];
   voiceLounges: VoiceLounge[];
   blockedUserIds: string[];
+  reports: ModerationReport[];
   outbox: OutboxRecord[];
   typingUsersByChannel: Record<string, string[]>;
 
@@ -48,7 +51,9 @@ export interface ZonaState {
   activeVoiceLoungeId: string | null;
   isMuted: boolean;
   isDeafened: boolean;
+  isScreenSharing: boolean;
   replyToMessageId: string | null;
+  editingMessageId: string | null;
   selectedMapUserId: string | null;
   searchQuery: string;
 
@@ -57,26 +62,41 @@ export interface ZonaState {
     displayName: string;
     username: string;
     avatarColor: string;
-    statusEmoji: string;
-    statusText: string;
+    statusEmoji?: string;
+    statusText?: string;
+    avatarUrl?: string;
     mode: BackendMode;
     userId?: string;
   }) => void;
-  updateMyProfile: (patch: Partial<Pick<Profile, 'displayName' | 'username' | 'avatarColor' | 'statusEmoji' | 'statusText'>>) => void;
+  updateMyProfile: (
+    patch: Partial<
+      Pick<
+        Profile,
+        'displayName' | 'username' | 'avatarColor' | 'avatarUrl' | 'statusEmoji' | 'statusText'
+      >
+    >
+  ) => void;
   signOutSession: () => void;
+  deleteMyAccount: () => void;
   setOnlineStatus: (online: boolean) => void;
   flushOutbox: () => number;
 
   // Navigation & UI
   selectCircle: (circleId: string | null) => void;
   selectChannel: (channelId: string) => void;
+  startDirectMessage: (targetUserId: string) => Channel | null;
+  togglePinChannel: (channelId: string) => void;
+  toggleArchiveChannel: (channelId: string) => void;
   setReplyToMessage: (messageId: string | null) => void;
+  setEditingMessage: (messageId: string | null) => void;
   setSelectedMapUser: (userId: string | null) => void;
   setSearchQuery: (q: string) => void;
   setTypingUsers: (channelId: string, names: string[]) => void;
 
   // Messaging (Offline-First + Real Media)
   sendTextMessage: (channelId: string, content: string) => Message;
+  editMessage: (messageId: string, content: string) => void;
+  deleteMessage: (messageId: string) => void;
   sendVoiceNote: (
     channelId: string,
     durationSec: number,
@@ -92,16 +112,18 @@ export interface ZonaState {
   toggleReaction: (messageId: string, emoji: string) => void;
   markSnapViewed: (messageId: string) => void;
 
-  // Discord-like Circles & Voice Lounge
+  // Circles & Voice Lounge
   createCircle: (name: string, shortCode?: string) => Circle;
   joinCircleByCode: (inviteCode: string) => { ok: boolean; circle?: Circle; error?: string };
+  setCircleMemberRole: (circleId: string, userId: string, role: CircleRole) => void;
   createChannel: (circleId: string, name: string, topic?: string) => Channel;
   joinVoiceLounge: (loungeId: string) => void;
   leaveVoiceLounge: () => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
+  toggleScreenShare: () => void;
 
-  // Snapchat-like Map & Magic Bridge ("Ajak Kumpul")
+  // Live Social Map & Bridge ("Ajak Kumpul")
   setMyPrivacyMode: (mode: PrivacyMode) => void;
   updateMyActivity: (emoji: string, text: string) => void;
   updateMyCoordinates: (point: Coordinates, areaLabel?: string) => void;
@@ -114,9 +136,14 @@ export interface ZonaState {
   }) => { pin: HangoutPin; channel: Channel };
   respondToHangout: (pinId: string, status: RsvpStatus) => void;
 
-  // Store Compliance (Block & Report)
+  // Safety & Store Compliance (Block & Report)
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
+  reportContent: (input: {
+    targetUserId?: string;
+    targetMessageId?: string;
+    reason: string;
+  }) => ModerationReport;
 
   hydrateSnapshot: (
     snapshot: Partial<
@@ -130,6 +157,7 @@ export interface ZonaState {
         | 'hangoutPins'
         | 'locations'
         | 'blockedUserIds'
+        | 'reports'
         | 'outbox'
       >
     >
@@ -160,10 +188,10 @@ function slugifyChannelName(input: string): string {
 }
 
 const SNAP_GRADIENTS = [
-  'linear-gradient(135deg, #1E293B 0%, #0F766E 55%, #22C55E 100%)',
-  'linear-gradient(135deg, #27221B 0%, #9A3412 52%, #FACC15 100%)',
-  'linear-gradient(135deg, #172554 0%, #0369A1 55%, #38BDF8 100%)',
-  'linear-gradient(135deg, #2B181E 0%, #BE185D 55%, #FB7185 100%)',
+  'linear-gradient(150deg, #1E293B 0%, #334155 50%, #0F766E 100%)',
+  'linear-gradient(150deg, #1F2937 0%, #374151 50%, #059669 100%)',
+  'linear-gradient(150deg, #172554 0%, #1E3A8A 55%, #0284C7 100%)',
+  'linear-gradient(150deg, #27272A 0%, #52525B 55%, #EA580C 100%)',
 ];
 
 export const useZonaStore = create<ZonaState>((set, get) => ({
@@ -180,6 +208,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
   hangoutPins: DEMO_HANGOUT_PINS,
   voiceLounges: DEMO_VOICE_LOUNGES,
   blockedUserIds: [],
+  reports: [],
   outbox: [],
   typingUsersByChannel: {},
 
@@ -188,7 +217,9 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
   activeVoiceLoungeId: null,
   isMuted: false,
   isDeafened: false,
+  isScreenSharing: false,
   replyToMessageId: null,
+  editingMessageId: null,
   selectedMapUserId: null,
   searchQuery: '',
 
@@ -196,8 +227,9 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     displayName,
     username,
     avatarColor,
-    statusEmoji,
-    statusText,
+    statusEmoji = '☕',
+    statusText = 'Tersedia',
+    avatarUrl,
     mode,
     userId,
   }) => {
@@ -221,6 +253,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
             displayName: cleanName,
             initials: makeInitials(cleanName),
             avatarColor,
+            avatarUrl,
             statusEmoji,
             statusText,
             isOnline: true,
@@ -279,8 +312,31 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     set({
       isAuthenticated: false,
       activeVoiceLoungeId: null,
+      isScreenSharing: false,
       replyToMessageId: null,
+      editingMessageId: null,
       searchQuery: '',
+    });
+  },
+
+  deleteMyAccount: () => {
+    set({
+      isAuthenticated: false,
+      activeVoiceLoungeId: null,
+      isScreenSharing: false,
+      replyToMessageId: null,
+      editingMessageId: null,
+      searchQuery: '',
+      blockedUserIds: [],
+      reports: [],
+      outbox: [],
+      profiles: DEMO_PROFILES,
+      circles: DEMO_CIRCLES,
+      channels: DEMO_CHANNELS,
+      messages: DEMO_MESSAGES,
+      locations: DEMO_LOCATIONS,
+      hangoutPins: DEMO_HANGOUT_PINS,
+      voiceLounges: DEMO_VOICE_LOUNGES,
     });
   },
 
@@ -306,12 +362,15 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
 
   selectCircle: (circleId) => {
     const state = get();
-    const matching = state.channels.filter((ch) => ch.circleId === circleId);
+    const matching = state.channels.filter(
+      (ch) => ch.circleId === circleId && !ch.isArchived
+    );
     const nextChannelId = matching[0]?.id ?? state.activeChannelId;
     set({
       activeCircleId: circleId,
       activeChannelId: nextChannelId,
       replyToMessageId: null,
+      editingMessageId: null,
       channels: state.channels.map((ch) =>
         ch.id === nextChannelId ? { ...ch, unreadCount: 0 } : ch
       ),
@@ -326,13 +385,70 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       activeCircleId: target.circleId,
       activeChannelId: channelId,
       replyToMessageId: null,
+      editingMessageId: null,
       channels: state.channels.map((ch) =>
         ch.id === channelId ? { ...ch, unreadCount: 0 } : ch
       ),
     });
   },
 
-  setReplyToMessage: (messageId) => set({ replyToMessageId: messageId }),
+  startDirectMessage: (targetUserId) => {
+    const state = get();
+    if (targetUserId === state.currentUserId) return null;
+    const target = state.profiles[targetUserId];
+    if (!target) return null;
+
+    const existing = state.channels.find(
+      (ch) =>
+        ch.type === 'dm' &&
+        ch.participantIds?.includes(state.currentUserId) &&
+        ch.participantIds?.includes(targetUserId)
+    );
+    if (existing) {
+      state.selectChannel(existing.id);
+      return existing;
+    }
+
+    const dmChannel: Channel = {
+      id: createId('dm'),
+      circleId: null,
+      type: 'dm',
+      name: target.displayName,
+      participantIds: [state.currentUserId, targetUserId],
+      unreadCount: 0,
+    };
+
+    set({
+      channels: [dmChannel, ...state.channels],
+      activeCircleId: null,
+      activeChannelId: dmChannel.id,
+      replyToMessageId: null,
+      editingMessageId: null,
+    });
+    return dmChannel;
+  },
+
+  togglePinChannel: (channelId) => {
+    set((state) => ({
+      channels: state.channels.map((ch) =>
+        ch.id === channelId ? { ...ch, isPinned: !ch.isPinned } : ch
+      ),
+    }));
+  },
+
+  toggleArchiveChannel: (channelId) => {
+    set((state) => ({
+      channels: state.channels.map((ch) =>
+        ch.id === channelId ? { ...ch, isArchived: !ch.isArchived } : ch
+      ),
+    }));
+  },
+
+  setReplyToMessage: (messageId) =>
+    set({ replyToMessageId: messageId, editingMessageId: null }),
+
+  setEditingMessage: (messageId) =>
+    set({ editingMessageId: messageId, replyToMessageId: null }),
 
   setSelectedMapUser: (userId) => set({ selectedMapUserId: userId }),
 
@@ -366,11 +482,42 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     set({
       messages: [...state.messages, message],
       replyToMessageId: null,
+      editingMessageId: null,
       outbox: state.isOnline
         ? state.outbox
         : [...state.outbox, { id: createId('ob'), messageId: id, channelId, createdAt }],
     });
     return message;
+  },
+
+  editMessage: (messageId, rawContent) => {
+    const content = rawContent.trim();
+    if (!content) return;
+    const { currentUserId, messages } = get();
+    set({
+      editingMessageId: null,
+      messages: messages.map((m) =>
+        m.id === messageId && m.senderId === currentUserId
+          ? { ...m, content, editedAt: new Date().toISOString() }
+          : m
+      ),
+    });
+  },
+
+  deleteMessage: (messageId) => {
+    const { currentUserId, messages } = get();
+    set({
+      messages: messages.map((m) =>
+        m.id === messageId && m.senderId === currentUserId
+          ? {
+              ...m,
+              content: 'Pesan ini telah dihapus',
+              isDeleted: true,
+              reactions: [],
+            }
+          : m
+      ),
+    });
   },
 
   sendVoiceNote: (channelId, durationSec, audioUrl, waveformPeaks) => {
@@ -385,10 +532,13 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       channelId,
       senderId: state.currentUserId,
       type: 'voice_note',
-      content: `Voice note (${mins}:${secs})`,
+      content: `Pesan suara (${mins}:${secs})`,
       voiceDurationSec: safeDuration,
       audioUrl,
-      waveformPeaks: waveformPeaks && waveformPeaks.length > 0 ? waveformPeaks : [9, 16, 12, 22, 18, 10, 20, 15, 23, 13, 17, 11],
+      waveformPeaks:
+        waveformPeaks && waveformPeaks.length > 0
+          ? waveformPeaks
+          : [9, 16, 12, 22, 18, 10, 20, 15, 23, 13, 17, 11, 15, 10, 14, 9],
       reactions: [],
       status: state.isOnline ? 'sent' : 'sending',
       createdAt,
@@ -415,7 +565,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       type: 'quick_snap',
       content: caption.trim() || 'Quick Snap 24 jam',
       mediaUrl,
-      snapCaption: caption.trim() || 'Momen spontan • 24 jam',
+      snapCaption: caption.trim() || 'Momen spontan · 24 jam',
       snapGradient: gradient,
       snapViewOnce: viewOnce,
       snapViewedBy: [],
@@ -437,7 +587,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     const { currentUserId, messages } = get();
     set({
       messages: messages.map((msg) => {
-        if (msg.id !== messageId) return msg;
+        if (msg.id !== messageId || msg.isDeleted) return msg;
         const existing = msg.reactions.find((r) => r.emoji === emoji);
         if (!existing) {
           return {
@@ -486,18 +636,19 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       id: circleId,
       name: cleanName,
       shortCode: code,
-      accentColor: '#FACC15',
+      accentColor: '#10B981',
       inviteCode,
-      description: 'Circle baru dibuat di ZONA',
+      description: 'Circle pertemanan dekat',
       memberIds: [state.currentUserId],
+      memberRoles: { [state.currentUserId]: 'owner' },
     };
 
     const defaultChannel: Channel = {
       id: defaultChId,
       circleId,
       type: 'text',
-      name: 'obrolan',
-      topic: `Selamat datang di ${cleanName}!`,
+      name: 'umum',
+      topic: `Obrolan utama ${cleanName}`,
       unreadCount: 0,
     };
 
@@ -505,7 +656,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       id: createId('vl'),
       circleId,
       name: 'Ruang Santai',
-      topic: 'Drop-in Voice 1-Tap',
+      topic: 'Ngobrol suara bersama',
       participantIds: [],
       speakingUserIds: [],
     };
@@ -531,7 +682,14 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     if (found) {
       const updated = state.circles.map((c) =>
         c.id === found.id && !c.memberIds.includes(state.currentUserId)
-          ? { ...c, memberIds: [...c.memberIds, state.currentUserId] }
+          ? {
+              ...c,
+              memberIds: [...c.memberIds, state.currentUserId],
+              memberRoles: {
+                ...(c.memberRoles ?? {}),
+                [state.currentUserId]: 'member' as CircleRole,
+              },
+            }
           : c
       );
       const firstCh = state.channels.find((ch) => ch.circleId === found.id);
@@ -550,8 +708,21 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
 
     return {
       ok: false,
-      error: 'Kode tidak ditemukan. Coba ZONA-KAMPUS07, ZONA-MABAR99, atau kode ZONA-XXXXXX.',
+      error: 'Kode tidak ditemukan. Periksa kembali kode undangan Circle.',
     };
+  },
+
+  setCircleMemberRole: (circleId, userId, role) => {
+    set((state) => ({
+      circles: state.circles.map((c) =>
+        c.id === circleId
+          ? {
+              ...c,
+              memberRoles: { ...(c.memberRoles ?? {}), [userId]: role },
+            }
+          : c
+      ),
+    }));
   },
 
   createChannel: (circleId, name, topic) => {
@@ -561,7 +732,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       circleId,
       type: 'text',
       name: slugifyChannelName(name),
-      topic: topic?.trim() || 'Kanal topik baru',
+      topic: topic?.trim() || 'Diskusi topik',
       unreadCount: 0,
     };
     set({
@@ -578,6 +749,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       activeVoiceLoungeId: loungeId,
       isMuted: false,
       isDeafened: false,
+      isScreenSharing: false,
       voiceLounges: voiceLounges.map((vl) => {
         const cleaned = vl.participantIds.filter((id) => id !== currentUserId);
         const cleanedSpeaking = vl.speakingUserIds.filter(
@@ -605,6 +777,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       activeVoiceLoungeId: null,
       isMuted: false,
       isDeafened: false,
+      isScreenSharing: false,
       voiceLounges: voiceLounges.map((vl) => ({
         ...vl,
         participantIds: vl.participantIds.filter((id) => id !== currentUserId),
@@ -639,6 +812,10 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       isDeafened: nextDeafened,
       isMuted: nextDeafened ? true : get().isMuted,
     });
+  },
+
+  toggleScreenShare: () => {
+    set((state) => ({ isScreenSharing: !state.isScreenSharing }));
   },
 
   setMyPrivacyMode: (mode) => {
@@ -721,7 +898,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       title: title.trim() || 'Ajak Kumpul',
       placeName: placeName.trim() || 'Titik Kumpul',
       point,
-      startsAtLabel: startsAtLabel.trim() || 'Hari ini • Segera',
+      startsAtLabel: startsAtLabel.trim() || 'Hari ini · Segera',
       rsvps: [{ userId: state.currentUserId, status: 'going', etaMinutes: eta }],
       createdAt: now,
       expiresAt,
@@ -732,7 +909,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       circleId,
       type: 'hangout',
       name: slugifyChannelName(placeName || title),
-      topic: `Pin Ajak Kumpul — ${pin.placeName}`,
+      topic: `${pin.placeName} · ${pin.startsAtLabel}`,
       unreadCount: 0,
       isEphemeral: true,
       hangoutPinId: pinId,
@@ -790,6 +967,19 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     }));
   },
 
+  reportContent: ({ targetUserId, targetMessageId, reason }) => {
+    const report: ModerationReport = {
+      id: createId('rep'),
+      reporterId: get().currentUserId,
+      targetUserId,
+      targetMessageId,
+      reason: reason.trim() || 'Konten tidak pantas',
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({ reports: [report, ...state.reports] }));
+    return report;
+  },
+
   hydrateSnapshot: (snapshot) => {
     set((state) => ({
       ...state,
@@ -803,6 +993,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       ...(snapshot.hangoutPins ? { hangoutPins: snapshot.hangoutPins } : {}),
       ...(snapshot.locations ? { locations: { ...state.locations, ...snapshot.locations } } : {}),
       ...(snapshot.blockedUserIds ? { blockedUserIds: snapshot.blockedUserIds } : {}),
+      ...(snapshot.reports ? { reports: snapshot.reports } : {}),
       ...(snapshot.outbox ? { outbox: snapshot.outbox } : {}),
     }));
   },

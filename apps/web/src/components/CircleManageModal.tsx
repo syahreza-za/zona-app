@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link2, PlusCircle, Users, X } from 'lucide-react';
+import { Link2, Plus, Users, X } from 'lucide-react';
 import { useZonaStore } from '@zona/shared';
 
 interface CircleManageModalProps {
@@ -21,7 +21,7 @@ export function CircleManageModal({ onClose, onNotify }: CircleManageModalProps)
     e.preventDefault();
     if (!name.trim()) return;
     const circle = createCircle(name, shortCode);
-    onNotify(`Circle "${circle.name}" dibuat! Kode undangan: ${circle.inviteCode}`);
+    onNotify(`Circle "${circle.name}" dibuat (${circle.inviteCode}).`);
     onClose();
   };
 
@@ -30,40 +30,44 @@ export function CircleManageModal({ onClose, onNotify }: CircleManageModalProps)
     setError(null);
     const res = joinCircleByCode(inviteCode);
     if (!res.ok) {
-      setError(res.error ?? 'Gagal bergabung ke Circle.');
+      setError(res.error ?? 'Kode undangan tidak valid.');
       return;
     }
-    onNotify(`Berhasil bergabung ke "${res.circle?.name}"!`);
+    onNotify(`Bergabung ke "${res.circle?.name}".`);
     onClose();
   };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="map-header-row">
+        <div className="modal-head">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Users size={18} color="var(--accent-yellow)" />
-            <h3>Circles</h3>
+            <Users size={18} strokeWidth={1.75} color="var(--accent)" />
+            <h3>Circle</h3>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose}>
-            <X size={16} />
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Tutup">
+            <X size={17} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="privacy-segment" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="rsvp-segment" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <button
             type="button"
-            className={`privacy-btn ${tab === 'create' ? 'active fuzzy' : ''}`}
+            className={`rsvp-choice ${tab === 'create' ? 'selected' : ''}`}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
             onClick={() => setTab('create')}
           >
-            <PlusCircle size={13} /> Buat Circle
+            <Plus size={14} strokeWidth={1.75} />
+            <span>Buat Baru</span>
           </button>
           <button
             type="button"
-            className={`privacy-btn ${tab === 'join' ? 'active exact' : ''}`}
+            className={`rsvp-choice ${tab === 'join' ? 'selected' : ''}`}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
             onClick={() => setTab('join')}
           >
-            <Link2 size={13} /> Gabung Kode
+            <Link2 size={14} strokeWidth={1.75} />
+            <span>Gabung Kode</span>
           </button>
         </div>
 
@@ -73,7 +77,7 @@ export function CircleManageModal({ onClose, onNotify }: CircleManageModalProps)
               Nama Circle
               <input
                 className="field-input"
-                placeholder="Mis: Geng Kosan Kemang"
+                placeholder="Contoh: Geng Kosan Kemang"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -91,18 +95,18 @@ export function CircleManageModal({ onClose, onNotify }: CircleManageModalProps)
               />
             </label>
             <div className="modal-actions">
-              <button type="button" className="pill-action" onClick={onClose}>
+              <button type="button" className="btn-secondary" onClick={onClose}>
                 Batal
               </button>
-              <button type="submit" className="pill-action primary">
-                Buat Circle &amp; Kode Undangan
+              <button type="submit" className="btn-primary">
+                Buat Circle
               </button>
             </div>
           </form>
         ) : (
           <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <label className="field-label">
-              Kode Undangan Circle
+              Kode Undangan
               <input
                 className="field-input"
                 placeholder="ZONA-KAMPUS07"
@@ -112,16 +116,13 @@ export function CircleManageModal({ onClose, onNotify }: CircleManageModalProps)
                 autoFocus
               />
             </label>
-            <span className="channel-meta">
-              Contoh kode aktif: <strong>ZONA-KAMPUS07</strong> atau <strong>ZONA-MABAR99</strong>
-            </span>
             {error && <div className="inline-error">{error}</div>}
             <div className="modal-actions">
-              <button type="button" className="pill-action" onClick={onClose}>
+              <button type="button" className="btn-secondary" onClick={onClose}>
                 Batal
               </button>
-              <button type="submit" className="pill-action primary">
-                Gabung Sekarang
+              <button type="submit" className="btn-primary">
+                Gabung
               </button>
             </div>
           </form>

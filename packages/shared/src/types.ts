@@ -10,6 +10,10 @@ export type RsvpStatus = 'going' | 'otw' | 'maybe';
 
 export type BackendMode = 'demo' | 'cloud';
 
+export type CircleRole = 'owner' | 'admin' | 'member';
+
+export type MessageGroupPosition = 'single' | 'first' | 'middle' | 'last';
+
 export interface Profile {
   id: string;
   username: string;
@@ -31,16 +35,19 @@ export interface Circle {
   inviteCode: string;
   description: string;
   memberIds: string[];
+  memberRoles?: Record<string, CircleRole>;
 }
 
 export interface Channel {
   id: string;
-  circleId: string | null; // null = Direct Message (WhatsApp style)
+  circleId: string | null; // null = Direct Message
   type: ChannelType;
   name: string;
   topic?: string;
   participantIds?: string[];
   unreadCount: number;
+  isPinned?: boolean;
+  isArchived?: boolean;
   isEphemeral?: boolean;
   expiresAt?: string;
   hangoutPinId?: string;
@@ -70,7 +77,18 @@ export interface Message {
   reactions: MessageReaction[];
   status: DeliveryStatus;
   createdAt: string;
+  editedAt?: string;
+  isDeleted?: boolean;
   expiresAt?: string;
+}
+
+export interface GroupedMessage {
+  message: Message;
+  groupPosition: MessageGroupPosition;
+  showDateSeparator: boolean;
+  dateLabel?: string;
+  showAvatar: boolean;
+  showSenderName: boolean;
 }
 
 export interface Coordinates {
@@ -88,6 +106,18 @@ export interface UserLocation {
   batteryPct: number;
   isMoving: boolean;
   updatedAt: string;
+}
+
+export interface MapMarkerItem {
+  userId: string;
+  point: Coordinates;
+}
+
+export interface MapCluster<T extends MapMarkerItem = MapMarkerItem> {
+  id: string;
+  point: Coordinates;
+  items: T[];
+  isCluster: boolean;
 }
 
 export interface HangoutRsvp {
@@ -130,5 +160,14 @@ export interface OutboxRecord {
   id: string;
   messageId: string;
   channelId: string;
+  createdAt: string;
+}
+
+export interface ModerationReport {
+  id: string;
+  reporterId: string;
+  targetUserId?: string;
+  targetMessageId?: string;
+  reason: string;
   createdAt: string;
 }

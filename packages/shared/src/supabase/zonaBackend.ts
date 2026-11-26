@@ -27,7 +27,7 @@ export class ZonaCloudBackend {
 
   getClient(): SupabaseClient {
     if (!this.client) {
-      throw new Error('Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY.');
+      throw new Error('Supabase belum dikonfigurasi.');
     }
     return this.client;
   }
@@ -75,9 +75,48 @@ export class ZonaCloudBackend {
     return data;
   }
 
+  async signInWithApple(redirectTo?: string) {
+    const client = this.getClient();
+    const { data, error } = await client.auth.signInWithOAuth({
+      provider: 'apple',
+      options: redirectTo ? { redirectTo } : undefined,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   async signOut() {
     if (!this.client) return;
     await this.client.auth.signOut();
+  }
+
+  async deleteOwnAccount() {
+    if (!this.client) return;
+    const { error } = await this.client.rpc('delete_own_account');
+    if (error) throw error;
+    await this.client.auth.signOut();
+  }
+
+  async fetchLivekitToken(roomName: string, participantName: string): Promise<{ token: string; url: string }> {
+    const client = this.getClient();
+    const { data, error } = await client.functions.invoke('livekit-token', {
+      body: { roomName, participantName },
+    });
+    if (error) throw error;
+    return data as { token: string; url: string };
+  }
+
+  async registerPushToken(token: string, platform: 'web' | 'ios' | 'android' | 'desktop') {
+    const client = this.getClient();
+    const session = await this.getSession();
+    if (!session?.user) return;
+    const { error } = await client.from('push_tokens').upsert({
+      user_id: session.user.id,
+      token,
+      platform,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
   }
 
   async uploadMediaBlob(userId: string, blob: Blob, ext: string): Promise<string> {
@@ -178,6 +217,15 @@ export class ZonaCloudBackend {
     if (error) throw error;
   }
 
+  async getCircleMapMembers(circleId: string) {
+    const client = this.getClient();
+    const { data, error } = await client.rpc('get_circle_map_members', {
+      p_circle_id: circleId,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   async createCircle(name: string, shortCode: string) {
     const client = this.getClient();
     const { data, error } = await client.rpc('create_circle_with_defaults', {
@@ -224,7 +272,12 @@ export class ZonaCloudBackend {
     if (error) throw error;
   }
 
-  async reportContent(reporterId: string, reason: string, targetUserId?: string, targetMessageId?: string) {
+  async reportContent(
+    reporterId: string,
+    reason: string,
+    targetUserId?: string,
+    targetMessageId?: string
+  ) {
     const client = this.getClient();
     const { error } = await client.from('moderation_reports').insert({
       reporter_id: reporterId,

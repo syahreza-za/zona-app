@@ -2,7 +2,7 @@
   "expo": {
     "name": "ZONA",
     "slug": "zona-app",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "zona",
@@ -10,8 +10,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.zona.messenger",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "ZONA menggunakan lokasimu untuk menampilkan posisi di Live Social Map sesuai mode privasi (Tepat, Area, atau Ghost).",
-        "NSMicrophoneUsageDescription": "ZONA memerlukan mikrofon untuk Voice Note dan Voice Lounge."
+        "NSLocationWhenInUseUsageDescription": "ZONA menggunakan lokasimu untuk menampilkan posisi di Peta Sosial sesuai mode privasi (Tepat, Area, atau Ghost).",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ZONA memperbarui lokasi secara hemat baterai di latar belakang hanya saat mode privasi mengizinkan.",
+        "NSMicrophoneUsageDescription": "ZONA memerlukan mikrofon untuk pesan suara dan Voice Lounge.",
+        "NSCameraUsageDescription": "ZONA memerlukan kamera untuk mengambil foto Quick Snap.",
+        "UIBackgroundModes": ["audio", "location"]
       }
     },
     "android": {
@@ -19,7 +22,8 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "CAMERA"
       ]
     }
   }
