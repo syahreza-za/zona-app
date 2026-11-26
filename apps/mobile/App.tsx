@@ -18,6 +18,8 @@ import {
   groupMessages,
   resolveVisibleCoordinates,
   useZonaStore,
+  type ChatWallpaperTheme,
+  type HangoutCategory,
   type PrivacyMode,
 } from '@zona/shared';
 
@@ -26,42 +28,68 @@ type SheetSnap = 'peek' | 'half' | 'expanded';
 
 const PALETTES = {
   light: {
-    rail: '#F2F3F5',
-    sidebar: '#F8F9FA',
-    canvas: '#FFFFFF',
-    input: '#F2F3F5',
-    bubbleIn: '#F2F3F5',
-    bubbleOut: '#DCFCE7',
+    rail: '#EFEEE9',
+    sidebar: '#F8F7F4',
+    canvasByTheme: {
+      clean: '#EEF3F0',
+      'warm-sand': '#F4F1EA',
+      'ocean-mist': '#ECF4F8',
+      'midnight-forest': '#E7F1EC',
+    } as Record<ChatWallpaperTheme, string>,
+    elevated: '#FFFFFF',
+    input: '#ECEAE3',
+    bubbleIn: '#FFFFFF',
+    bubbleOut: '#10B981',
+    bubbleOutText: '#FFFFFF',
     hairline: 'rgba(15, 23, 42, 0.08)',
     textPrimary: '#111827',
     textSecondary: '#4B5563',
-    textMuted: '#86909C',
-    accent: '#10B981',
-    accentInk: '#FFFFFF',
-    accentSoft: 'rgba(16, 185, 129, 0.12)',
+    textMuted: '#7C8594',
     danger: '#EF4444',
-    mapBg: '#EAEFF5',
+    mapBg: '#F3EFE6',
+    mapPark: '#CBE8C8',
+    mapWater: '#A8D5F2',
     glass: 'rgba(255, 255, 255, 0.92)',
   },
   dark: {
-    rail: '#1E1F22',
-    sidebar: '#2B2D31',
-    canvas: '#313338',
-    input: '#383A40',
-    bubbleIn: '#2B2D31',
-    bubbleOut: '#1F3A33',
-    hairline: 'rgba(255, 255, 255, 0.06)',
-    textPrimary: '#F2F3F5',
-    textSecondary: '#B5BAC1',
-    textMuted: '#72767D',
-    accent: '#10B981',
-    accentInk: '#FFFFFF',
-    accentSoft: 'rgba(16, 185, 129, 0.18)',
+    rail: '#181A20',
+    sidebar: '#1F222A',
+    canvasByTheme: {
+      clean: '#252932',
+      'warm-sand': '#262320',
+      'ocean-mist': '#1C2632',
+      'midnight-forest': '#172320',
+    } as Record<ChatWallpaperTheme, string>,
+    elevated: '#2C313D',
+    input: '#2C313D',
+    bubbleIn: '#2D323E',
+    bubbleOut: '#144A3E',
+    bubbleOutText: '#F3F6F8',
+    hairline: 'rgba(255, 255, 255, 0.07)',
+    textPrimary: '#F3F5F8',
+    textSecondary: '#B7BEC9',
+    textMuted: '#7C8492',
     danger: '#F87171',
-    mapBg: '#23262D',
-    glass: 'rgba(30, 31, 34, 0.9)',
+    mapBg: '#141B29',
+    mapPark: '#172B24',
+    mapWater: '#0D1626',
+    glass: 'rgba(24, 26, 32, 0.92)',
   },
 };
+
+const CATEGORY_COLORS: Record<HangoutCategory, string> = {
+  coffee: '#D97706',
+  food: '#EA580C',
+  gaming: '#3B82F6',
+  sport: '#10B981',
+};
+
+const CHAT_THEMES: Array<{ id: ChatWallpaperTheme; label: string }> = [
+  { id: 'clean', label: 'Default Clean' },
+  { id: 'warm-sand', label: 'Warm Sand' },
+  { id: 'ocean-mist', label: 'Ocean Mist' },
+  { id: 'midnight-forest', label: 'Midnight Forest' },
+];
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -77,10 +105,10 @@ export default function App() {
   const [draft, setDraft] = useState('');
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('half');
 
-  const c = PALETTES[theme];
-
   const {
     currentUserId,
+    chatTheme,
+    setChatTheme,
     profiles,
     circles,
     channels,
@@ -109,11 +137,26 @@ export default function App() {
     deleteMyAccount,
   } = useZonaStore();
 
+  const c = PALETTES[theme];
   const me = profiles[currentUserId];
   const activeChannel = channels.find((ch) => ch.id === activeChannelId);
+  const activeCircle = circles.find((ci) => ci.id === (activeCircleId ?? circles[0]?.id));
+  const activeAccent = activeCircle?.accentColor ?? '#10B981';
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
   const myLocation = locations[currentUserId];
   const myPrivacy: PrivacyMode = myLocation?.privacyMode ?? 'exact';
+  const canvasBg = c.canvasByTheme[chatTheme];
+
+  const activeSnapStories = useMemo(() => {
+    const seen = new Set<string>();
+    return messages
+      .filter((m) => m.type === 'quick_snap' && !m.isDeleted && !blockedUserIds.includes(m.senderId))
+      .filter((m) => {
+        if (seen.has(m.senderId)) return false;
+        seen.add(m.senderId);
+        return true;
+      });
+  }, [messages, blockedUserIds]);
 
   const dmChannels = useMemo(() => {
     const q = dmSearch.trim().toLowerCase();
@@ -148,7 +191,7 @@ export default function App() {
     [locations, blockedUserIds, profiles]
   );
 
-  const clusters = useMemo(() => clusterMapMarkers(visibleFriends, 260), [visibleFriends]);
+  const clusters = useMemo(() => clusterMapMarkers(visibleFriends, 220), [visibleFriends]);
 
   const handleSend = () => {
     if (!activeChannel || !draft.trim()) return;
@@ -161,6 +204,7 @@ export default function App() {
       circleId: activeCircleId ?? circles[0]?.id ?? 'c-kampus',
       title: 'Ngopi Sore',
       placeName: 'M Bloc Space',
+      category: 'coffee',
       startsAtLabel: 'Hari ini · 18.30 WIB',
       point: { lat: -6.2442, lng: 106.8006 },
     });
@@ -173,15 +217,48 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: c.canvas }]}>
+    <SafeAreaView style={[styles.root, { backgroundColor: c.sidebar }]}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
 
-      {/* TAB 1: CHAT (Default — WhatsApp UX: List -> Thread) */}
+      {/* TAB 1: CHAT (Default — Quick Snap Stories Strip + WhatsApp DM List) */}
       {tab === 'chat' && !inThread && (
-        <View style={[styles.flex1, { backgroundColor: c.canvas }]}>
-          <View style={[styles.header, { borderBottomColor: c.hairline }]}>
-            <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Chat</Text>
+        <View style={[styles.flex1, { backgroundColor: c.sidebar }]}>
+          <View style={[styles.header, { borderBottomColor: c.hairline, backgroundColor: c.sidebar }]}>
+            <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Pesan</Text>
           </View>
+
+          {activeSnapStories.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ maxHeight: 84, borderBottomWidth: 1, borderBottomColor: c.hairline }}
+              contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 10, gap: 12 }}
+            >
+              {activeSnapStories.map((snap) => {
+                const author = profiles[snap.senderId];
+                if (!author) return null;
+                return (
+                  <TouchableOpacity
+                    key={snap.id}
+                    style={{ alignItems: 'center', gap: 4 }}
+                    onPress={() => {
+                      selectChannel(snap.channelId);
+                      setInThread(true);
+                    }}
+                  >
+                    <View style={[styles.storyRing, { borderColor: activeAccent }]}>
+                      <View style={[styles.avatarSm, { backgroundColor: author.avatarColor }]}>
+                        <Text style={styles.avatarText}>{author.initials}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: c.textSecondary, fontWeight: '500' }}>
+                      {author.displayName}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
 
           <View style={styles.searchWrap}>
             <TextInput
@@ -197,7 +274,7 @@ export default function App() {
                   key={f}
                   style={[
                     styles.filterPill,
-                    { backgroundColor: dmFilter === f ? c.accentSoft : c.input },
+                    { backgroundColor: dmFilter === f ? `${activeAccent}22` : c.input },
                   ]}
                   onPress={() => setDmFilter(f)}
                 >
@@ -205,7 +282,7 @@ export default function App() {
                     style={{
                       fontSize: 12.5,
                       fontWeight: dmFilter === f ? '600' : '500',
-                      color: dmFilter === f ? c.accent : c.textSecondary,
+                      color: dmFilter === f ? activeAccent : c.textSecondary,
                     }}
                   >
                     {f === 'all' ? 'Semua' : 'Belum Dibaca'}
@@ -219,9 +296,7 @@ export default function App() {
             {dmChannels.map((ch) => {
               const partnerId = ch.participantIds?.find((id) => id !== currentUserId);
               const partner = partnerId ? profiles[partnerId] : null;
-              const lastMsg = [...messages]
-                .reverse()
-                .find((m) => m.channelId === ch.id);
+              const lastMsg = [...messages].reverse().find((m) => m.channelId === ch.id);
 
               return (
                 <TouchableOpacity
@@ -235,7 +310,7 @@ export default function App() {
                   <View
                     style={[
                       styles.avatar,
-                      { backgroundColor: partner?.avatarColor ?? c.accent },
+                      { backgroundColor: partner?.avatarColor ?? activeAccent },
                     ]}
                   >
                     <Text style={styles.avatarText}>{partner?.initials ?? 'ZN'}</Text>
@@ -259,7 +334,7 @@ export default function App() {
                         {lastMsg?.content ?? partner?.statusText ?? ''}
                       </Text>
                       {ch.unreadCount > 0 && (
-                        <View style={[styles.badge, { backgroundColor: c.accent }]}>
+                        <View style={[styles.badge, { backgroundColor: activeAccent }]}>
                           <Text style={styles.badgeText}>{ch.unreadCount}</Text>
                         </View>
                       )}
@@ -272,12 +347,12 @@ export default function App() {
         </View>
       )}
 
-      {/* CHAT THREAD VIEW */}
+      {/* CHAT THREAD VIEW (Warm Textured Surface + Adaptive Circle Accent Bubbles) */}
       {tab === 'chat' && inThread && activeChannel && (
-        <View style={[styles.flex1, { backgroundColor: c.canvas }]}>
-          <View style={[styles.header, { borderBottomColor: c.hairline }]}>
+        <View style={[styles.flex1, { backgroundColor: canvasBg }]}>
+          <View style={[styles.header, { borderBottomColor: c.hairline, backgroundColor: c.glass }]}>
             <TouchableOpacity onPress={() => setInThread(false)} style={styles.backBtn}>
-              <Text style={{ color: c.accent, fontWeight: '600', fontSize: 14 }}>Kembali</Text>
+              <Text style={{ color: activeAccent, fontWeight: '600', fontSize: 14 }}>Kembali</Text>
             </TouchableOpacity>
             <View style={styles.flex1}>
               <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
@@ -311,7 +386,7 @@ export default function App() {
                       <Text
                         style={[
                           styles.datePill,
-                          { backgroundColor: c.input, color: c.textSecondary },
+                          { backgroundColor: c.glass, color: c.textSecondary },
                         ]}
                       >
                         {dateLabel}
@@ -323,7 +398,11 @@ export default function App() {
                     style={[
                       styles.bubble,
                       {
-                        backgroundColor: mine ? c.bubbleOut : c.bubbleIn,
+                        backgroundColor: mine
+                          ? theme === 'light'
+                            ? activeAccent
+                            : c.bubbleOut
+                          : c.bubbleIn,
                         alignSelf: mine ? 'flex-end' : 'flex-start',
                         marginTop: isGrouped ? 3 : 10,
                       },
@@ -334,7 +413,12 @@ export default function App() {
                         {sender.displayName}
                       </Text>
                     )}
-                    <Text style={[styles.msgText, { color: c.textPrimary }]}>
+                    <Text
+                      style={[
+                        styles.msgText,
+                        { color: mine ? c.bubbleOutText : c.textPrimary },
+                      ]}
+                    >
                       {message.content}
                     </Text>
                     {pin && (
@@ -342,17 +426,25 @@ export default function App() {
                         {(['going', 'otw', 'maybe'] as const).map((status) => (
                           <TouchableOpacity
                             key={status}
-                            style={[styles.rsvpBtn, { backgroundColor: c.accent }]}
+                            style={[
+                              styles.rsvpBtn,
+                              { backgroundColor: CATEGORY_COLORS[pin.category ?? 'coffee'] },
+                            ]}
                             onPress={() => respondToHangout(pin.id, status)}
                           >
-                            <Text style={{ color: c.accentInk, fontSize: 12, fontWeight: '600' }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
                               {status === 'going' ? 'Ikut' : status === 'otw' ? 'OTW' : 'Nanti'}
                             </Text>
                           </TouchableOpacity>
                         ))}
                       </View>
                     )}
-                    <Text style={[styles.bubbleTime, { color: c.textMuted }]}>
+                    <Text
+                      style={[
+                        styles.bubbleTime,
+                        { color: mine ? 'rgba(255,255,255,0.78)' : c.textMuted },
+                      ]}
+                    >
                       {formatTime(message.createdAt)}
                     </Text>
                   </View>
@@ -361,7 +453,7 @@ export default function App() {
             }}
           />
 
-          <View style={[styles.composer, { borderTopColor: c.hairline, backgroundColor: c.canvas }]}>
+          <View style={[styles.composer, { borderTopColor: c.hairline, backgroundColor: c.glass }]}>
             <TouchableOpacity
               style={[styles.composerAction, { backgroundColor: c.input }]}
               onPress={() => sendQuickSnap(activeChannel.id, 'Snap dari ponsel')}
@@ -377,20 +469,23 @@ export default function App() {
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: c.accent }]}
+              style={[styles.sendBtn, { backgroundColor: activeAccent }]}
               onPress={handleSend}
             >
-              <Text style={{ color: c.accentInk, fontWeight: '600', fontSize: 13 }}>Kirim</Text>
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>Kirim</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* TAB 2: CIRCLES & VOICE LOUNGE */}
+      {/* TAB 2: CIRCLES WITH COVER BANNER & VOICE LOUNGE */}
       {tab === 'circles' && (
         <View style={[styles.flex1, { backgroundColor: c.sidebar }]}>
-          <View style={[styles.header, { borderBottomColor: c.hairline, backgroundColor: c.canvas }]}>
-            <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Circles</Text>
+          <View style={[styles.circleBanner, { backgroundColor: activeAccent }]}>
+            <Text style={styles.circleBannerTitle}>{activeCircle?.name ?? 'Circles'}</Text>
+            <Text style={styles.circleBannerSub}>
+              {activeCircle?.memberIds.length ?? 0} anggota · {activeCircle?.inviteCode}
+            </Text>
           </View>
 
           <ScrollView style={styles.flex1} contentContainerStyle={{ padding: 14, gap: 14 }}>
@@ -402,13 +497,13 @@ export default function App() {
                     key={circle.id}
                     style={[
                       styles.filterPill,
-                      { backgroundColor: active ? c.accent : c.canvas },
+                      { backgroundColor: active ? circle.accentColor : c.elevated },
                     ]}
                     onPress={() => selectCircle(circle.id)}
                   >
                     <Text
                       style={{
-                        color: active ? c.accentInk : c.textPrimary,
+                        color: active ? '#FFFFFF' : c.textPrimary,
                         fontWeight: '600',
                         fontSize: 13,
                       }}
@@ -426,7 +521,7 @@ export default function App() {
               .map((ch) => (
                 <TouchableOpacity
                   key={ch.id}
-                  style={[styles.channelItem, { backgroundColor: c.canvas, borderColor: c.hairline }]}
+                  style={[styles.channelItem, { backgroundColor: c.elevated, borderColor: c.hairline }]}
                   onPress={() => {
                     selectChannel(ch.id);
                     setTab('chat');
@@ -455,7 +550,7 @@ export default function App() {
                 return (
                   <View
                     key={vl.id}
-                    style={[styles.voiceRow, { backgroundColor: c.canvas, borderColor: c.hairline }]}
+                    style={[styles.voiceRow, { backgroundColor: c.elevated, borderColor: c.hairline }]}
                   >
                     <View style={styles.flex1}>
                       <Text style={[styles.rowTitle, { color: c.textPrimary }]}>{vl.name}</Text>
@@ -466,7 +561,7 @@ export default function App() {
                     <TouchableOpacity
                       style={[
                         styles.rsvpBtn,
-                        { backgroundColor: joined ? c.danger : c.accent },
+                        { backgroundColor: joined ? c.danger : activeAccent },
                       ]}
                       onPress={() =>
                         joined ? leaveVoiceLounge() : joinVoiceLounge(vl.id)
@@ -483,10 +578,9 @@ export default function App() {
         </View>
       )}
 
-      {/* TAB 3: FULL-BLEED MAP + FLOATING CONTROLS + DRAGGABLE BOTTOM SHEET */}
+      {/* TAB 3: FULL-BLEED COLORFUL MAP + GATHERING HALO + 3-STATE BOTTOM SHEET */}
       {tab === 'map' && (
         <View style={[styles.flex1, { backgroundColor: c.mapBg }]}>
-          {/* Floating Top Privacy Pill */}
           <View style={styles.mapTopOverlay}>
             <View style={[styles.privacyBar, { backgroundColor: c.glass, borderColor: c.hairline }]}>
               {(['exact', 'fuzzy', 'ghost'] as PrivacyMode[]).map((mode) => (
@@ -494,7 +588,7 @@ export default function App() {
                   key={mode}
                   style={[
                     styles.privacyPillBtn,
-                    myPrivacy === mode && { backgroundColor: c.accent },
+                    myPrivacy === mode && { backgroundColor: activeAccent },
                   ]}
                   onPress={() => setMyPrivacyMode(mode)}
                 >
@@ -502,7 +596,7 @@ export default function App() {
                     style={{
                       fontSize: 12,
                       fontWeight: '600',
-                      color: myPrivacy === mode ? c.accentInk : c.textSecondary,
+                      color: myPrivacy === mode ? '#FFFFFF' : c.textSecondary,
                     }}
                   >
                     {mode === 'exact' ? 'Tepat' : mode === 'fuzzy' ? 'Area' : 'Ghost'}
@@ -512,8 +606,10 @@ export default function App() {
             </View>
           </View>
 
-          {/* Clean Circular Avatar Markers on Full-Bleed Canvas */}
           <View style={styles.mapStage}>
+            {/* Warm Gathering Halo visual */}
+            <View style={styles.mobileGatheringHalo} />
+
             {clusters.map((cluster, idx) => {
               const first = cluster.items[0];
               return (
@@ -522,8 +618,8 @@ export default function App() {
                   style={[
                     styles.mapPinPos,
                     {
-                      left: `${20 + ((idx * 27) % 58)}%`,
-                      top: `${24 + ((idx * 19) % 34)}%`,
+                      left: `${18 + ((idx * 26) % 58)}%`,
+                      top: `${24 + ((idx * 18) % 34)}%`,
                     },
                   ]}
                   onPress={() => {
@@ -551,15 +647,13 @@ export default function App() {
             })}
           </View>
 
-          {/* Floating Add Hangout Pin FAB */}
           <TouchableOpacity
-            style={[styles.mapFab, { backgroundColor: c.accent }]}
+            style={[styles.mapFab, { backgroundColor: activeAccent }]}
             onPress={handleQuickHangout}
           >
-            <Text style={{ color: c.accentInk, fontSize: 22, fontWeight: '600' }}>+</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '600' }}>+</Text>
           </TouchableOpacity>
 
-          {/* 3-State Bottom Sheet (Peek / Half / Expanded) */}
           <View
             style={[
               styles.bottomSheet,
@@ -583,8 +677,8 @@ export default function App() {
                   style={[
                     styles.sheetCard,
                     {
-                      backgroundColor: c.canvas,
-                      borderColor: selectedMapUserId === userId ? c.accent : c.hairline,
+                      backgroundColor: c.elevated,
+                      borderColor: selectedMapUserId === userId ? activeAccent : c.hairline,
                     },
                   ]}
                 >
@@ -610,11 +704,11 @@ export default function App() {
         </View>
       )}
 
-      {/* TAB 4: PROFIL & PENGATURAN */}
+      {/* TAB 4: PROFIL & 4 TEMA CHAT */}
       {tab === 'profile' && me && (
         <ScrollView
-          style={[styles.flex1, { backgroundColor: c.canvas }]}
-          contentContainerStyle={{ padding: 16, gap: 16 }}
+          style={[styles.flex1, { backgroundColor: c.sidebar }]}
+          contentContainerStyle={{ padding: 16, gap: 14 }}
         >
           <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Profil</Text>
           <View style={styles.profileRow}>
@@ -632,22 +726,48 @@ export default function App() {
           </View>
 
           <TouchableOpacity
-            style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.sidebar }]}
+            style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.elevated }]}
             onPress={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           >
-            <Text style={[styles.rowTitle, { color: c.textPrimary }]}>Tema Tampilan</Text>
-            <Text style={{ color: c.accent, fontWeight: '600', fontSize: 13 }}>
+            <Text style={[styles.rowTitle, { color: c.textPrimary }]}>Mode Tampilan</Text>
+            <Text style={{ color: activeAccent, fontWeight: '600', fontSize: 13 }}>
               {theme === 'dark' ? 'Mode Gelap' : 'Mode Terang'}
             </Text>
           </TouchableOpacity>
 
-          <View style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.sidebar }]}>
+          <Text style={[styles.sectionLabel, { color: c.textMuted }]}>TEMA WALLPAPER CHAT</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {CHAT_THEMES.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.filterPill,
+                  {
+                    backgroundColor: chatTheme === item.id ? activeAccent : c.elevated,
+                  },
+                ]}
+                onPress={() => setChatTheme(item.id)}
+              >
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: '600',
+                    color: chatTheme === item.id ? '#FFFFFF' : c.textPrimary,
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.elevated }]}>
             <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
               Pengguna Diblokir ({blockedUserIds.length})
             </Text>
             {blockedUserIds.length > 0 && (
               <TouchableOpacity onPress={() => unblockUser(blockedUserIds[0])}>
-                <Text style={{ color: c.accent, fontSize: 13 }}>Buka</Text>
+                <Text style={{ color: activeAccent, fontSize: 13 }}>Buka</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -665,7 +785,7 @@ export default function App() {
 
       {/* Floating Compact Voice Pill above Bottom Bar */}
       {activeVoice && (
-        <View style={[styles.floatingVoicePill, { backgroundColor: c.accent }]}>
+        <View style={[styles.floatingVoicePill, { backgroundColor: activeAccent }]}>
           <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
             Suara aktif · {activeVoice.name}
           </Text>
@@ -682,11 +802,11 @@ export default function App() {
         </View>
       )}
 
-      {/* Native 4-Tab Bottom Bar (Chat, Circles, Map, Profil) */}
+      {/* Native 4-Tab Bottom Bar */}
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: c.canvas, borderTopColor: c.hairline },
+          { backgroundColor: c.elevated, borderTopColor: c.hairline },
         ]}
       >
         {(
@@ -711,7 +831,7 @@ export default function App() {
                 style={{
                   fontSize: 12.5,
                   fontWeight: active ? '600' : '500',
-                  color: active ? c.accent : c.textMuted,
+                  color: active ? activeAccent : c.textMuted,
                 }}
               >
                 {item.label}
@@ -735,8 +855,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  headerTitle: { fontSize: 17, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '700' },
   backBtn: { paddingRight: 6, paddingVertical: 6 },
+  storyRing: {
+    padding: 2.5,
+    borderRadius: 99,
+    borderWidth: 2,
+  },
   searchWrap: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, gap: 8 },
   searchInput: { height: 38, borderRadius: 10, paddingHorizontal: 12, fontSize: 14 },
   filterRow: { flexDirection: 'row', gap: 8 },
@@ -760,9 +885,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarSm: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -785,7 +910,7 @@ const styles = StyleSheet.create({
   badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   dateWrap: { alignItems: 'center', marginVertical: 10 },
   datePill: { fontSize: 11.5, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  bubble: { maxWidth: '82%', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
+  bubble: { maxWidth: '82%', borderRadius: 17, paddingHorizontal: 12, paddingVertical: 8 },
   senderLabel: { fontSize: 11.5, fontWeight: '600', marginBottom: 2 },
   msgText: { fontSize: 14.5, lineHeight: 21 },
   bubbleTime: { fontSize: 10.5, alignSelf: 'flex-end', marginTop: 3 },
@@ -801,6 +926,9 @@ const styles = StyleSheet.create({
   composerAction: { paddingHorizontal: 12, height: 38, borderRadius: 19, justifyContent: 'center' },
   composerInput: { flex: 1, height: 38, borderRadius: 19, paddingHorizontal: 14, fontSize: 14.5 },
   sendBtn: { paddingHorizontal: 15, height: 38, borderRadius: 19, justifyContent: 'center' },
+  circleBanner: { paddingHorizontal: 16, paddingTop: 22, paddingBottom: 14 },
+  circleBannerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  circleBannerSub: { color: 'rgba(255,255,255,0.88)', fontSize: 12, marginTop: 2 },
   sectionLabel: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.4 },
   channelItem: { padding: 12, borderRadius: 12, borderWidth: 1 },
   voiceRow: {
@@ -815,12 +943,25 @@ const styles = StyleSheet.create({
   privacyBar: { flexDirection: 'row', padding: 3, borderRadius: 999, borderWidth: 1 },
   privacyPillBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   mapStage: { flex: 1, position: 'relative' },
+  mobileGatheringHalo: {
+    position: 'absolute',
+    left: '50%',
+    top: '44%',
+    width: 110,
+    height: 110,
+    marginLeft: -55,
+    marginTop: -55,
+    borderRadius: 55,
+    backgroundColor: 'rgba(245, 158, 11, 0.24)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(245, 158, 11, 0.45)',
+  },
   mapPinPos: { position: 'absolute', alignItems: 'center' },
   mapAvatarRing: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2.5,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3,
     borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   Map,
   MessageCircle,
@@ -13,12 +13,15 @@ import {
   createZonaCloudBackend,
   useZonaStore,
   type Coordinates,
+  type Message,
 } from '@zona/shared';
 import { AuthOnboarding } from './components/AuthOnboarding';
 import { CircleRail } from './components/CircleRail';
 import { ChannelSidebar } from './components/ChannelSidebar';
 import { ChatPanel } from './components/ChatPanel';
 import { SocialMapPanel } from './components/SocialMapPanel';
+import { VoiceStageView } from './components/VoiceStageView';
+import { StoryViewerModal } from './components/StoryViewerModal';
 import { HangoutModal } from './components/HangoutModal';
 import { CircleManageModal } from './components/CircleManageModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
@@ -42,6 +45,7 @@ export function App() {
   });
 
   const [fullMapMode, setFullMapMode] = useState(false);
+  const [voiceStageOpen, setVoiceStageOpen] = useState(false);
   const [splitMapOpen, setSplitMapOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth > 1120 : true
   );
@@ -52,6 +56,10 @@ export function App() {
   );
   const [highlightedPinId, setHighlightedPinId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [storyState, setStoryState] = useState<{
+    stories: Message[];
+    index: number;
+  } | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -74,6 +82,7 @@ export function App() {
   });
 
   const isAuthenticated = useZonaStore((s) => s.isAuthenticated);
+  const chatTheme = useZonaStore((s) => s.chatTheme);
   const activeCircleId = useZonaStore((s) => s.activeCircleId);
   const activeVoiceLoungeId = useZonaStore((s) => s.activeVoiceLoungeId);
   const isMuted = useZonaStore((s) => s.isMuted);
@@ -87,6 +96,7 @@ export function App() {
   const hydrateSnapshot = useZonaStore((s) => s.hydrateSnapshot);
 
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
+  const activeCircle = circles.find((c) => c.id === activeCircleId);
 
   const cloudBackend = useMemo(
     () =>
@@ -106,6 +116,13 @@ export function App() {
     const t = window.setTimeout(() => setToast(null), 3000);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  // Close Voice Stage automatically if disconnected
+  useEffect(() => {
+    if (!activeVoiceLoungeId && voiceStageOpen) {
+      setVoiceStageOpen(false);
+    }
+  }, [activeVoiceLoungeId, voiceStageOpen]);
 
   // Hydrate Dexie offline workspace & subscribe to persist updates
   useEffect(() => {
@@ -175,13 +192,57 @@ export function App() {
     }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#1E1F22' : '#FFFFFF');
+      meta.setAttribute('content', theme === 'dark' ? '#181A20' : '#F4F1EA');
     }
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   }, []);
+
+  // Per-Circle Dynamic Accent Adaptation (Emerald, Sky Blue, Amber, Coral, Teal)
+  const dynamicAccentStyle = useMemo<CSSProperties>(() => {
+    const accent = activeCircle?.accentColor ?? '#10B981';
+    const isSky = accent.toLowerCase() === '#0ea5e9';
+    const isAmber = accent.toLowerCase() === '#d97706';
+    const isCoral = accent.toLowerCase() === '#ea580c';
+    const isTeal = accent.toLowerCase() === '#0d9488';
+
+    const hover = isSky
+      ? '#0284C7'
+      : isAmber
+        ? '#B45309'
+        : isCoral
+          ? '#C2410C'
+          : isTeal
+            ? '#0F766E'
+            : '#059669';
+
+    const bubbleOutLight = isSky
+      ? 'linear-gradient(180deg, #0EA5E9 0%, #0284C7 100%)'
+      : isAmber
+        ? 'linear-gradient(180deg, #D97706 0%, #B45309 100%)'
+        : isCoral
+          ? 'linear-gradient(180deg, #EA580C 0%, #C2410C 100%)'
+          : 'linear-gradient(180deg, #10B981 0%, #059669 100%)';
+
+    const bubbleOutDark = isSky
+      ? '#163D5C'
+      : isAmber
+        ? '#4D3314'
+        : isCoral
+          ? '#522515'
+          : '#144A3E';
+
+    return {
+      '--accent': accent,
+      '--accent-hover': hover,
+      '--accent-soft': `${accent}1F`,
+      '--bubble-out-bg': theme === 'dark' ? bubbleOutDark : bubbleOutLight,
+      '--bubble-out-text': '#FFFFFF',
+      '--bubble-out-meta': 'rgba(255, 255, 255, 0.82)',
+    } as CSSProperties;
+  }, [activeCircle?.accentColor, theme]);
 
   if (!isAuthenticated) {
     return (
@@ -201,13 +262,21 @@ export function App() {
   return (
     <div
       className={shellClass}
+      style={dynamicAccentStyle}
+      data-chat-theme={chatTheme}
       data-mobile-tab={mobileTab}
       data-mobile-view={mobileChatView}
     >
       <CircleRail
         fullMapMode={fullMapMode}
-        onToggleFullMap={() => setFullMapMode((v) => !v)}
-        onSelectChatSpace={() => setFullMapMode(false)}
+        onToggleFullMap={() => {
+          setFullMapMode((v) => !v);
+          setVoiceStageOpen(false);
+        }}
+        onSelectChatSpace={() => {
+          setFullMapMode(false);
+          setVoiceStageOpen(false);
+        }}
         onOpenCircleModal={() => setCircleModalOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
@@ -223,31 +292,45 @@ export function App() {
               : undefined
           }
           onChannelPicked={() => {
+            setVoiceStageOpen(false);
             setMobileTab('chat');
             setMobileChatView('thread');
           }}
+          onOpenVoiceStage={() => {
+            setFullMapMode(false);
+            setVoiceStageOpen(true);
+            setMobileTab('chat');
+            setMobileChatView('thread');
+          }}
+          onOpenStory={(stories, index) => setStoryState({ stories, index })}
           onOpenCircleModal={() => setCircleModalOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onNotify={notify}
         />
       )}
 
-      {!fullMapMode && (
-        <ChatPanel
-          splitMapOpen={splitMapOpen}
-          onToggleSplitMap={() => setSplitMapOpen((v) => !v)}
-          onBackMobile={() => setMobileChatView('list')}
-          onOpenHangoutModal={() =>
-            setHangoutModal((m) => ({ ...m, open: true }))
-          }
-          onFocusMapPin={(pinId) => {
-            setHighlightedPinId(pinId);
-            setSplitMapOpen(true);
-            setMobileTab('map');
-          }}
-          onNotify={notify}
-        />
-      )}
+      {!fullMapMode &&
+        (voiceStageOpen && activeVoice ? (
+          <VoiceStageView
+            onCloseStage={() => setVoiceStageOpen(false)}
+            onNotify={notify}
+          />
+        ) : (
+          <ChatPanel
+            splitMapOpen={splitMapOpen}
+            onToggleSplitMap={() => setSplitMapOpen((v) => !v)}
+            onBackMobile={() => setMobileChatView('list')}
+            onOpenHangoutModal={() =>
+              setHangoutModal((m) => ({ ...m, open: true }))
+            }
+            onFocusMapPin={(pinId) => {
+              setHighlightedPinId(pinId);
+              setSplitMapOpen(true);
+              setMobileTab('map');
+            }}
+            onNotify={notify}
+          />
+        ))}
 
       {(fullMapMode || splitMapOpen || mobileTab === 'map') && (
         <SocialMapPanel
@@ -261,6 +344,7 @@ export function App() {
           }
           onSelectHangoutChannel={() => {
             setFullMapMode(false);
+            setVoiceStageOpen(false);
             setMobileTab('chat');
             setMobileChatView('thread');
           }}
@@ -281,14 +365,22 @@ export function App() {
 
       {/* Mobile Floating Compact Voice Pill above Bottom Bar */}
       {activeVoice && (
-        <div className="mobile-voice-pill" role="status">
+        <div
+          className="mobile-voice-pill"
+          role="status"
+          onClick={() => {
+            setVoiceStageOpen(true);
+            setMobileTab('chat');
+            setMobileChatView('thread');
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
             <Volume2 size={15} strokeWidth={2} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {activeVoice.name}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               style={{ color: '#ffffff' }}
@@ -316,12 +408,13 @@ export function App() {
         </div>
       )}
 
-      {/* Mobile Native 4-Tab Bottom Bar (Chat, Circles, Map, Profil) */}
+      {/* Mobile Native 4-Tab Bottom Bar */}
       <nav className="mobile-bottom-nav" aria-label="Navigasi Utama">
         <button
           type="button"
           className={`mobile-nav-btn ${mobileTab === 'chat' ? 'active' : ''}`}
           onClick={() => {
+            setVoiceStageOpen(false);
             setMobileTab('chat');
             setMobileChatView('list');
           }}
@@ -332,7 +425,10 @@ export function App() {
         <button
           type="button"
           className={`mobile-nav-btn ${mobileTab === 'circles' ? 'active' : ''}`}
-          onClick={() => setMobileTab('circles')}
+          onClick={() => {
+            setVoiceStageOpen(false);
+            setMobileTab('circles');
+          }}
         >
           <Users size={20} strokeWidth={1.75} />
           <span>Circles</span>
@@ -340,7 +436,10 @@ export function App() {
         <button
           type="button"
           className={`mobile-nav-btn ${mobileTab === 'map' ? 'active' : ''}`}
-          onClick={() => setMobileTab('map')}
+          onClick={() => {
+            setVoiceStageOpen(false);
+            setMobileTab('map');
+          }}
         >
           <Map size={20} strokeWidth={1.75} />
           <span>Map</span>
@@ -348,30 +447,44 @@ export function App() {
         <button
           type="button"
           className={`mobile-nav-btn ${mobileTab === 'profile' ? 'active' : ''}`}
-          onClick={() => setMobileTab('profile')}
+          onClick={() => {
+            setVoiceStageOpen(false);
+            setMobileTab('profile');
+          }}
         >
           <User size={20} strokeWidth={1.75} />
           <span>Profil</span>
         </button>
       </nav>
 
+      {storyState && (
+        <StoryViewerModal
+          stories={storyState.stories}
+          initialIndex={storyState.index}
+          onClose={() => setStoryState(null)}
+          onNotify={notify}
+        />
+      )}
+
       {hangoutModal.open && (
         <HangoutModal
           initialCoords={hangoutModal.coords}
           initialPlace={hangoutModal.placeName}
           onClose={() => setHangoutModal((m) => ({ ...m, open: false }))}
-          onConfirm={({ placeName, title, startsAtLabel, coords }) => {
+          onConfirm={({ placeName, title, startsAtLabel, category, coords }) => {
             const targetCircleId = activeCircleId ?? circles[0]?.id ?? 'c-kampus';
             const { pin } = createHangoutPin({
               circleId: targetCircleId,
               title,
               placeName,
               startsAtLabel,
+              category,
               point: coords,
             });
             setHangoutModal((m) => ({ ...m, open: false }));
             setHighlightedPinId(pin.id);
             setFullMapMode(false);
+            setVoiceStageOpen(false);
             setSplitMapOpen(true);
             setMobileTab('chat');
             setMobileChatView('thread');

@@ -27,6 +27,9 @@ import {
   X,
 } from 'lucide-react';
 import {
+  distanceMeters,
+  estimateEtaMinutes,
+  formatDistanceLabel,
   groupMessages,
   useZonaStore,
   type Message,
@@ -35,6 +38,7 @@ import {
 import { Avatar } from './Avatar';
 import { QuickSnapModal } from './QuickSnapModal';
 import { ReportModal } from './ReportModal';
+import { HANGOUT_CATEGORY_META } from './SocialMapPanel';
 import { VoiceNoteRecorder } from '../services/mediaTools';
 import { buildDirectionsUrl } from '../services/geocoder';
 
@@ -83,6 +87,7 @@ export function ChatPanel({
     circles,
     channels,
     messages,
+    locations,
     hangoutPins,
     blockedUserIds,
     typingUsersByChannel,
@@ -139,6 +144,7 @@ export function ChatPanel({
       ? activeChannel.participantIds?.find((id) => id !== currentUserId)
       : undefined;
   const dmPartner = dmPartnerId ? profiles[dmPartnerId] : null;
+  const myLoc = locations[currentUserId];
 
   const rawMessages = useMemo(
     () =>
@@ -360,6 +366,7 @@ export function ChatPanel({
         if (openMenuMsgId) setOpenMenuMsgId(null);
       }}
     >
+      {/* Floating Liquid-Glass Header */}
       <header className="chat-header">
         <div className="chat-header-left">
           {onBackMobile && (
@@ -377,6 +384,8 @@ export function ChatPanel({
             <Avatar
               initials={dmPartner.initials}
               color={dmPartner.avatarColor}
+              variant={dmPartner.avatarVariant}
+              seed={dmPartner.id}
               avatarUrl={dmPartner.avatarUrl}
               size="sm"
               online={dmPartner.isOnline}
@@ -457,6 +466,7 @@ export function ChatPanel({
         </div>
       )}
 
+      {/* Textured Wallpaper Message Stream */}
       <div className="messages-scroll">
         {groupedMessages.length === 0 && (
           <div style={{ margin: 'auto', textAlign: 'center', padding: 24 }}>
@@ -510,6 +520,8 @@ export function ChatPanel({
                       <Avatar
                         initials={sender.initials}
                         color={sender.avatarColor}
+                        variant={sender.avatarVariant}
+                        seed={sender.id}
                         avatarUrl={sender.avatarUrl}
                         size="sm"
                       />
@@ -522,7 +534,7 @@ export function ChatPanel({
                     <span className="msg-sender-name">{sender.displayName}</span>
                   )}
 
-                  {/* Hover Action Bar — Hidden until hover/focus */}
+                  {/* Hover Action Bar */}
                   {!msg.isDeleted && (
                     <div
                       className="msg-hover-bar"
@@ -638,7 +650,7 @@ export function ChatPanel({
                     </div>
                   )}
 
-                  <div className="msg-bubble">
+                  <div className={`msg-bubble ${msg.type === 'hangout_card' ? 'hangout-shell' : ''}`}>
                     {quoted && !msg.isDeleted && (
                       <div className="msg-reply-quote">
                         <span className="msg-reply-author">
@@ -780,97 +792,186 @@ export function ChatPanel({
                           </span>
                         </div>
                       </div>
-                    ) : msg.type === 'hangout_card' && pin ? (
-                      <div className="hangout-inline-card">
-                        <div className="hangout-inline-head">
-                          <div>
-                            <h4 className="hangout-inline-title">{pin.title}</h4>
-                            <p className="hangout-inline-place">
-                              <MapPin size={13} strokeWidth={1.75} color="var(--accent)" />
-                              <span>
-                                {pin.placeName} · {pin.startsAtLabel}
-                              </span>
-                            </p>
-                          </div>
-                        </div>
+                    ) : msg.type === 'hangout_card' && pin ? (() => {
+                      const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
+                      const CatIcon = cat.icon;
+                      const distLabel = myLoc
+                        ? `${formatDistanceLabel(distanceMeters(myLoc.point, pin.point))} · ~${estimateEtaMinutes(myLoc.point, pin.point)} mnt`
+                        : 'Sekitar lokasi';
+                      const goingRsvps = pin.rsvps.filter((r) => r.status !== 'maybe');
 
-                        <div className="rsvp-segment">
-                          {(
-                            [
-                              { id: 'going', label: 'Ikut' },
-                              { id: 'otw', label: 'OTW' },
-                              { id: 'maybe', label: 'Nanti' },
-                            ] as { id: RsvpStatus; label: string }[]
-                          ).map((opt) => {
-                            const myRsvp = pin.rsvps.find((r) => r.userId === currentUserId);
-                            return (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                className={`rsvp-choice ${
-                                  myRsvp?.status === opt.id ? 'selected' : ''
-                                }`}
-                                onClick={() => respondToHangout(pin.id, opt.id)}
+                      return (
+                        <div className="hangout-inline-card">
+                          {/* 110px Cartographic Mini-Map Preview */}
+                          <div
+                            className="hangout-minimap"
+                            onClick={() => onFocusMapPin?.(pin.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') onFocusMapPin?.(pin.id);
+                            }}
+                          >
+                            <svg
+                              className="hangout-minimap-svg"
+                              viewBox="0 0 340 120"
+                              preserveAspectRatio="none"
+                              aria-hidden="true"
+                            >
+                              <rect width="340" height="120" className="mm-land" />
+                              <path
+                                d="M 18 14 C 65 4 115 24 112 62 C 110 92 48 106 20 82 Z"
+                                className="mm-park"
+                              />
+                              <path
+                                d="M 245 48 C 285 38 332 54 334 94 C 336 116 278 122 246 102 Z"
+                                className="mm-park"
+                              />
+                              <path
+                                d="M -10 105 C 95 90 195 36 350 18"
+                                className="mm-water"
+                                strokeWidth="14"
+                                fill="none"
+                              />
+                              <path
+                                d="M 0 36 Q 160 56 340 28"
+                                className="mm-road-major"
+                                strokeWidth="8"
+                                fill="none"
+                              />
+                              <path
+                                d="M 162 0 Q 174 60 196 120"
+                                className="mm-road-major"
+                                strokeWidth="7"
+                                fill="none"
+                              />
+                              <path
+                                d="M 0 86 Q 165 72 340 94"
+                                className="mm-road-minor"
+                                strokeWidth="4"
+                                fill="none"
+                              />
+                            </svg>
+
+                            <span
+                              className="minimap-cat-badge"
+                              style={{ background: cat.color }}
+                            >
+                              <CatIcon size={11} strokeWidth={2} />
+                              <span>{cat.label}</span>
+                            </span>
+
+                            <div className="minimap-center-pin">
+                              <span
+                                className="minimap-pin-pulse"
+                                style={{ background: `${cat.color}40` }}
+                              />
+                              <span
+                                className="minimap-pin-core"
+                                style={{ background: cat.color }}
                               >
-                                {opt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="rsvp-summary">
-                          {pin.rsvps.map((r) => {
-                            const p = profiles[r.userId];
-                            if (!p) return null;
-                            const label =
-                              r.status === 'going'
-                                ? 'Ikut'
-                                : r.status === 'otw'
-                                  ? 'OTW'
-                                  : 'Nanti';
-                            return (
-                              <span key={r.userId}>
-                                {p.displayName} ({label}
-                                {r.etaMinutes ? ` · ${r.etaMinutes} mnt` : ''})
+                                <MapPin size={13} strokeWidth={2.2} color="#FFFFFF" />
                               </span>
-                            );
-                          })}
-                        </div>
+                            </div>
 
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: 8,
-                          }}
-                        >
-                          <div className="hangout-inline-links">
-                            <button
-                              type="button"
-                              className="inline-link-btn"
-                              onClick={() => onFocusMapPin?.(pin.id)}
-                            >
-                              <MapIcon size={12} strokeWidth={1.75} />
-                              <span>Lihat di Peta</span>
-                            </button>
-                            <a
-                              href={buildDirectionsUrl(pin.point, pin.placeName)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-link-btn"
-                            >
-                              <ExternalLink size={12} strokeWidth={1.75} />
-                              <span>Rute</span>
-                            </a>
+                            <span className="minimap-eta-badge">{distLabel}</span>
                           </div>
-                          <span className="msg-meta-inline">{formatTime(msg.createdAt)}</span>
+
+                          <div className="hangout-card-body">
+                            <div>
+                              <h4 className="hangout-inline-title">{pin.title}</h4>
+                              <p className="hangout-inline-place">
+                                <MapPin size={13} strokeWidth={1.75} color={cat.color} />
+                                <span>
+                                  {pin.placeName} · {pin.startsAtLabel}
+                                </span>
+                              </p>
+                            </div>
+
+                            {/* Overlapping Illustrated Avatar Stack of RSVPs */}
+                            <div className="rsvp-avatar-bar">
+                              <div className="avatar-stack">
+                                {pin.rsvps.slice(0, 5).map((r) => {
+                                  const p = profiles[r.userId];
+                                  if (!p) return null;
+                                  return (
+                                    <span key={r.userId} className="avatar-stack-item" title={`${p.displayName} (${r.status})`}>
+                                      <Avatar
+                                        initials={p.initials}
+                                        color={p.avatarColor}
+                                        variant={p.avatarVariant}
+                                        seed={p.id}
+                                        avatarUrl={p.avatarUrl}
+                                        size="xs"
+                                      />
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <span className="meta-text">
+                                {goingRsvps.length} ikut / OTW · {pin.rsvps.length} respon
+                              </span>
+                            </div>
+
+                            <div className="rsvp-segment">
+                              {(
+                                [
+                                  { id: 'going', label: 'Ikut' },
+                                  { id: 'otw', label: 'OTW' },
+                                  { id: 'maybe', label: 'Nanti' },
+                                ] as { id: RsvpStatus; label: string }[]
+                              ).map((opt) => {
+                                const myRsvp = pin.rsvps.find((r) => r.userId === currentUserId);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    className={`rsvp-choice ${
+                                      myRsvp?.status === opt.id ? 'selected' : ''
+                                    }`}
+                                    onClick={() => respondToHangout(pin.id, opt.id)}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 8,
+                              }}
+                            >
+                              <div className="hangout-inline-links">
+                                <button
+                                  type="button"
+                                  className="inline-link-btn"
+                                  onClick={() => onFocusMapPin?.(pin.id)}
+                                >
+                                  <MapIcon size={12} strokeWidth={1.75} />
+                                  <span>Lihat di Peta</span>
+                                </button>
+                                <a
+                                  href={buildDirectionsUrl(pin.point, pin.placeName)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-link-btn"
+                                >
+                                  <ExternalLink size={12} strokeWidth={1.75} />
+                                  <span>Rute</span>
+                                </a>
+                              </div>
+                              <span className="msg-meta-inline">{formatTime(msg.createdAt)}</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
+                      );
+                    })() : null}
                   </div>
 
-                  {/* Only render reaction chips if message actually has reactions */}
                   {msg.reactions.length > 0 && !msg.isDeleted && (
                     <div className="msg-reactions">
                       {msg.reactions.map((r) => (
@@ -936,6 +1037,9 @@ export function ChatPanel({
                         <Avatar
                           initials={p.initials}
                           color={p.avatarColor}
+                          variant={p.avatarVariant}
+                          seed={uid}
+                          avatarUrl={p.avatarUrl}
                           size="xs"
                           online={p.isOnline}
                           showPresence
@@ -956,7 +1060,7 @@ export function ChatPanel({
         </aside>
       )}
 
-      {/* WhatsApp-style Bottom Composer */}
+      {/* Floating Liquid-Glass Composer Bar */}
       <div className="composer-shell">
         {attachOpen && (
           <div className="composer-popover">

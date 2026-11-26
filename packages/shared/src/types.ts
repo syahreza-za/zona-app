@@ -14,12 +14,23 @@ export type CircleRole = 'owner' | 'admin' | 'member';
 
 export type MessageGroupPosition = 'single' | 'first' | 'middle' | 'last';
 
+export type ChatWallpaperTheme =
+  | 'clean'
+  | 'warm-sand'
+  | 'ocean-mist'
+  | 'midnight-forest';
+
+export type HangoutCategory = 'coffee' | 'food' | 'gaming' | 'sport';
+
+export type CircleBannerStyle = 'emerald' | 'sky' | 'amber' | 'coral' | 'teal';
+
 export interface Profile {
   id: string;
   username: string;
   displayName: string;
   initials: string;
   avatarColor: string;
+  avatarVariant?: number;
   avatarUrl?: string;
   statusEmoji: string;
   statusText: string;
@@ -32,6 +43,7 @@ export interface Circle {
   name: string;
   shortCode: string;
   accentColor: string;
+  bannerStyle?: CircleBannerStyle;
   inviteCode: string;
   description: string;
   memberIds: string[];
@@ -133,6 +145,7 @@ export interface HangoutPin {
   creatorId: string;
   title: string;
   placeName: string;
+  category?: HangoutCategory;
   point: Coordinates;
   startsAtLabel: string;
   rsvps: HangoutRsvp[];

@@ -46,6 +46,7 @@ export interface ZonaState {
   typingUsersByChannel: Record<string, string[]>;
 
   // Active UI selection
+  chatTheme: import('../types').ChatWallpaperTheme;
   activeCircleId: string | null;
   activeChannelId: string;
   activeVoiceLoungeId: string | null;
@@ -57,11 +58,14 @@ export interface ZonaState {
   selectedMapUserId: string | null;
   searchQuery: string;
 
+  setChatTheme: (theme: import('../types').ChatWallpaperTheme) => void;
+
   // Auth & Profile Actions
   completeOnboarding: (input: {
     displayName: string;
     username: string;
     avatarColor: string;
+    avatarVariant?: number;
     statusEmoji?: string;
     statusText?: string;
     avatarUrl?: string;
@@ -72,7 +76,13 @@ export interface ZonaState {
     patch: Partial<
       Pick<
         Profile,
-        'displayName' | 'username' | 'avatarColor' | 'avatarUrl' | 'statusEmoji' | 'statusText'
+        | 'displayName'
+        | 'username'
+        | 'avatarColor'
+        | 'avatarVariant'
+        | 'avatarUrl'
+        | 'statusEmoji'
+        | 'statusText'
       >
     >
   ) => void;
@@ -132,6 +142,7 @@ export interface ZonaState {
     title: string;
     placeName: string;
     startsAtLabel: string;
+    category?: import('../types').HangoutCategory;
     point: Coordinates;
   }) => { pin: HangoutPin; channel: Channel };
   respondToHangout: (pinId: string, status: RsvpStatus) => void;
@@ -194,6 +205,25 @@ const SNAP_GRADIENTS = [
   'linear-gradient(150deg, #27272A 0%, #52525B 55%, #EA580C 100%)',
 ];
 
+const CIRCLE_PALETTES: Array<{ accentColor: string; bannerStyle: import('../types').CircleBannerStyle }> = [
+  { accentColor: '#10B981', bannerStyle: 'emerald' },
+  { accentColor: '#0EA5E9', bannerStyle: 'sky' },
+  { accentColor: '#D97706', bannerStyle: 'amber' },
+  { accentColor: '#EA580C', bannerStyle: 'coral' },
+  { accentColor: '#0D9488', bannerStyle: 'teal' },
+];
+
+function inferHangoutCategory(
+  text: string
+): import('../types').HangoutCategory {
+  const lower = text.toLowerCase();
+  if (/kopi|coffee|cafe|kafe|matcha|tuku/.test(lower)) return 'coffee';
+  if (/makan|gultik|ramen|bakmi|dinner|kuliner|sate|sushi/.test(lower)) return 'food';
+  if (/lari|padel|futsal|gym|badminton|sepeda|olahraga|gbk/.test(lower)) return 'sport';
+  if (/mabar|game|rank|ps|billiard|bioskop|nonton/.test(lower)) return 'gaming';
+  return 'coffee';
+}
+
 export const useZonaStore = create<ZonaState>((set, get) => ({
   isAuthenticated: false,
   backendMode: 'demo',
@@ -212,6 +242,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
   outbox: [],
   typingUsersByChannel: {},
 
+  chatTheme: 'warm-sand',
   activeCircleId: 'c-kampus',
   activeChannelId: 'ch-kampus-ngopi',
   activeVoiceLoungeId: null,
@@ -223,12 +254,15 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
   selectedMapUserId: null,
   searchQuery: '',
 
+  setChatTheme: (chatTheme) => set({ chatTheme }),
+
   completeOnboarding: ({
     displayName,
     username,
     avatarColor,
+    avatarVariant = 0,
     statusEmoji = '☕',
-    statusText = 'Tersedia',
+    statusText = 'Lagi santai di Blok M',
     avatarUrl,
     mode,
     userId,
@@ -253,6 +287,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
             displayName: cleanName,
             initials: makeInitials(cleanName),
             avatarColor,
+            avatarVariant,
             avatarUrl,
             statusEmoji,
             statusText,
@@ -632,11 +667,13 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     const circleId = createId('circle');
     const defaultChId = createId('ch');
 
+    const palette = CIRCLE_PALETTES[state.circles.length % CIRCLE_PALETTES.length];
     const circle: Circle = {
       id: circleId,
       name: cleanName,
       shortCode: code,
-      accentColor: '#10B981',
+      accentColor: palette.accentColor,
+      bannerStyle: palette.bannerStyle,
       inviteCode,
       description: 'Circle pertemanan dekat',
       memberIds: [state.currentUserId],
@@ -880,7 +917,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
     });
   },
 
-  createHangoutPin: ({ circleId, title, placeName, startsAtLabel, point }) => {
+  createHangoutPin: ({ circleId, title, placeName, startsAtLabel, category, point }) => {
     const state = get();
     const pinId = createId('pin');
     const channelId = createId('ch-hangout');
@@ -897,6 +934,7 @@ export const useZonaStore = create<ZonaState>((set, get) => ({
       creatorId: state.currentUserId,
       title: title.trim() || 'Ajak Kumpul',
       placeName: placeName.trim() || 'Titik Kumpul',
+      category: category ?? inferHangoutCategory(`${title} ${placeName}`),
       point,
       startsAtLabel: startsAtLabel.trim() || 'Hari ini · Segera',
       rsvps: [{ userId: state.currentUserId, status: 'going', etaMinutes: eta }],

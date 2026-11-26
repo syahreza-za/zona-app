@@ -60,6 +60,11 @@ export function CircleRail({
             id={`rail-circle-${circle.id}`}
             type="button"
             className={`rail-btn ${isActive ? 'active' : ''}`}
+            style={
+              isActive
+                ? { background: circle.accentColor, color: '#FFFFFF' }
+                : undefined
+            }
             onClick={() => {
               selectCircle(circle.id);
               onSelectChatSpace();
@@ -68,7 +73,11 @@ export function CircleRail({
             aria-label={circle.name}
           >
             {circle.shortCode}
-            {unread > 0 && <span className="rail-badge">{unread}</span>}
+            {unread > 0 && (
+              <span className="rail-badge" style={{ background: circle.accentColor }}>
+                {unread}
+              </span>
+            )}
           </button>
         );
       })}
@@ -120,6 +129,8 @@ export function CircleRail({
           <Avatar
             initials={me.initials}
             color={me.avatarColor}
+            variant={me.avatarVariant}
+            seed={me.id}
             avatarUrl={me.avatarUrl}
             size="sm"
             online={me.isOnline}

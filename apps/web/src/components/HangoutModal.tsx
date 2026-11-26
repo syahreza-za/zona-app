@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Search, X } from 'lucide-react';
-import type { Coordinates, PlaceSuggestion } from '@zona/shared';
+import type { Coordinates, HangoutCategory, PlaceSuggestion } from '@zona/shared';
+import { HANGOUT_CATEGORY_META } from './SocialMapPanel';
 import { searchRealPlaces } from '../services/geocoder';
 
 interface HangoutModalProps {
@@ -11,9 +12,12 @@ interface HangoutModalProps {
     placeName: string;
     title: string;
     startsAtLabel: string;
+    category: HangoutCategory;
     coords: Coordinates;
   }) => void;
 }
+
+const CATEGORIES: HangoutCategory[] = ['coffee', 'food', 'gaming', 'sport'];
 
 export function HangoutModal({
   initialCoords,
@@ -28,6 +32,7 @@ export function HangoutModal({
   const [placeName, setPlaceName] = useState(initialPlace);
   const [title, setTitle] = useState('Ngopi Sore');
   const [startsAtLabel, setStartsAtLabel] = useState('Hari ini · 19.00 WIB');
+  const [category, setCategory] = useState<HangoutCategory>('coffee');
   const [coords, setCoords] = useState<Coordinates>(initialCoords);
 
   useEffect(() => {
@@ -49,7 +54,7 @@ export function HangoutModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!placeName.trim()) return;
-    onConfirm({ placeName, title, startsAtLabel, coords });
+    onConfirm({ placeName, title, startsAtLabel, category, coords });
   };
 
   return (
@@ -61,12 +66,44 @@ export function HangoutModal({
       >
         <div className="modal-head">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MapPin size={18} strokeWidth={1.75} color="var(--accent)" />
+            <MapPin size={18} strokeWidth={1.75} color={HANGOUT_CATEGORY_META[category].color} />
             <h3>Ajak Kumpul</h3>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Tutup">
             <X size={17} strokeWidth={1.75} />
           </button>
+        </div>
+
+        <div className="field-label">
+          Kategori Acara
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {CATEGORIES.map((catId) => {
+              const meta = HANGOUT_CATEGORY_META[catId];
+              const Icon = meta.icon;
+              const selected = category === catId;
+              return (
+                <button
+                  key={catId}
+                  type="button"
+                  className="rsvp-choice"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    background: selected ? meta.color : undefined,
+                    borderColor: selected ? meta.color : undefined,
+                    color: selected ? '#FFFFFF' : undefined,
+                    fontWeight: selected ? 600 : 500,
+                  }}
+                  onClick={() => setCategory(catId)}
+                >
+                  <Icon size={13} strokeWidth={1.8} />
+                  <span>{meta.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <label className="field-label">

@@ -4,6 +4,7 @@ import {
   Headphones,
   Link2,
   MapPin,
+  Maximize2,
   Mic,
   MicOff,
   MonitorUp,
@@ -20,7 +21,12 @@ import {
   VolumeX,
   WifiOff,
 } from 'lucide-react';
-import { useZonaStore, type ZonaCloudBackend } from '@zona/shared';
+import {
+  useZonaStore,
+  type CircleBannerStyle,
+  type Message,
+  type ZonaCloudBackend,
+} from '@zona/shared';
 import { Avatar } from './Avatar';
 import { zonaVoiceEngine, type AudioDeviceInfo } from '../services/livekitVoice';
 
@@ -30,10 +36,20 @@ interface ChannelSidebarProps {
   cloudBackend: ZonaCloudBackend;
   mobileMode?: 'chat' | 'circles';
   onChannelPicked?: () => void;
+  onOpenVoiceStage: () => void;
+  onOpenStory: (stories: Message[], startIndex: number) => void;
   onOpenCircleModal: () => void;
   onOpenSettings: () => void;
   onNotify: (msg: string) => void;
 }
+
+const BANNER_GRADIENTS: Record<CircleBannerStyle, string> = {
+  emerald: 'linear-gradient(135deg, #065F46 0%, #10B981 58%, #D97706 100%)',
+  sky: 'linear-gradient(135deg, #0C4A6E 0%, #0284C7 55%, #38BDF8 100%)',
+  amber: 'linear-gradient(135deg, #78350F 0%, #D97706 60%, #F59E0B 100%)',
+  coral: 'linear-gradient(135deg, #9A3412 0%, #EA580C 60%, #FB923C 100%)',
+  teal: 'linear-gradient(135deg, #115E59 0%, #0D9488 60%, #2DD4BF 100%)',
+};
 
 function formatShortTime(iso?: string): string {
   if (!iso) return '';
@@ -47,6 +63,8 @@ export function ChannelSidebar({
   cloudBackend,
   mobileMode,
   onChannelPicked,
+  onOpenVoiceStage,
+  onOpenStory,
   onOpenCircleModal,
   onOpenSettings,
   onNotify,
@@ -98,6 +116,31 @@ export function ChannelSidebar({
   const me = profiles[currentUserId];
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
 
+  // Active 24h Quick Snaps for the Stories Strip above DM list
+  const activeSnapStories = useMemo(() => {
+    const now = Date.now();
+    const snaps = messages
+      .filter(
+        (m) =>
+          m.type === 'quick_snap' &&
+          !m.isDeleted &&
+          !blockedUserIds.includes(m.senderId) &&
+          (!m.expiresAt || new Date(m.expiresAt).getTime() > now)
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    // One representative latest snap per friend
+    const seen = new Set<string>();
+    const unique: Message[] = [];
+    for (const s of snaps) {
+      if (!seen.has(s.senderId)) {
+        seen.add(s.senderId);
+        unique.push(s);
+      }
+    }
+    return unique;
+  }, [messages, blockedUserIds]);
+
   const lastMessageByChannel = useMemo(() => {
     const map: Record<string, { text: string; createdAt: string }> = {};
     for (const msg of messages) {
@@ -148,6 +191,10 @@ export function ChannelSidebar({
     [activeCircle, voiceLounges]
   );
 
+  const circleOnlineCount = activeCircle
+    ? activeCircle.memberIds.filter((uid) => profiles[uid]?.isOnline).length
+    : 0;
+
   const handleCreateChannel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCircle || !newChannelName.trim()) return;
@@ -171,8 +218,7 @@ export function ChannelSidebar({
 
   const handleJoinVoice = async (loungeId: string, loungeName: string) => {
     if (activeVoiceLoungeId === loungeId) {
-      await zonaVoiceEngine.disconnect();
-      leaveVoiceLounge();
+      onOpenVoiceStage();
       return;
     }
     joinVoiceLounge(loungeId);
@@ -222,52 +268,74 @@ export function ChannelSidebar({
 
   return (
     <section className="channel-sidebar" aria-label="Daftar Obrolan">
-      <header className="sidebar-header">
-        <div style={{ minWidth: 0 }}>
-          <h2 className="sidebar-title">
-            {activeCircle ? activeCircle.name : 'Pesan'}
-          </h2>
-          {activeCircle && (
-            <p className="sidebar-sub">{activeCircle.memberIds.length} anggota</p>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {activeCircle ? (
-            <>
+      {/* Circle Cover Banner (76px illustrated banner) OR Clean DM Header */}
+      {activeCircle ? (
+        <header
+          className="circle-cover-banner"
+          style={{
+            background: BANNER_GRADIENTS[activeCircle.bannerStyle ?? 'emerald'],
+          }}
+        >
+          <svg
+            className="circle-banner-art"
+            viewBox="0 0 280 84"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <circle cx="242" cy="14" r="46" fill="rgba(255,255,255,0.14)" />
+            <circle cx="204" cy="74" r="34" fill="rgba(255,255,255,0.09)" />
+            <path
+              d="M0 66 Q72 40 156 58 T280 42 L280 84 L0 84 Z"
+              fill="rgba(0,0,0,0.14)"
+            />
+          </svg>
+          <div className="circle-banner-content">
+            <div style={{ minWidth: 0 }}>
+              <h2 className="circle-banner-title">{activeCircle.name}</h2>
+              <p className="circle-banner-meta">
+                <span className="banner-online-dot" />
+                <span>
+                  {circleOnlineCount} online · {activeCircle.memberIds.length} anggota
+                </span>
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button
                 type="button"
-                className="icon-btn"
+                className="banner-icon-btn"
                 onClick={handleCopyInvite}
                 title="Salin tautan undangan"
                 aria-label="Salin tautan undangan"
               >
-                <Link2 size={17} strokeWidth={1.75} />
+                <Link2 size={15} strokeWidth={1.9} />
               </button>
               <button
                 id="btn-add-channel"
                 type="button"
-                className="icon-btn"
+                className="banner-icon-btn"
                 onClick={() => setAddingChannel((v) => !v)}
                 title="Buat kanal baru"
                 aria-label="Buat kanal baru"
               >
-                <Plus size={18} strokeWidth={1.75} />
+                <Plus size={16} strokeWidth={2} />
               </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => setNewDmOpen((v) => !v)}
-              title="Mulai obrolan baru"
-              aria-label="Mulai obrolan baru"
-            >
-              <UserPlus size={17} strokeWidth={1.75} />
-            </button>
-          )}
-        </div>
-      </header>
+            </div>
+          </div>
+        </header>
+      ) : (
+        <header className="sidebar-header">
+          <h2 className="sidebar-title">Pesan</h2>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setNewDmOpen((v) => !v)}
+            title="Mulai obrolan baru"
+            aria-label="Mulai obrolan baru"
+          >
+            <UserPlus size={17} strokeWidth={1.75} />
+          </button>
+        </header>
+      )}
 
       {!isOnline && (
         <div className="offline-banner">
@@ -308,40 +376,75 @@ export function ChannelSidebar({
         </div>
       )}
 
-      {/* WhatsApp-style Search & Filter for DM mode */}
+      {/* DM Mode: Quick Snap Stories Strip + Search & Filter */}
       {!activeCircle && (
-        <div className="sidebar-search-wrap">
-          <div className="sidebar-search-box">
-            <Search size={15} strokeWidth={1.75} className="sidebar-search-icon" />
-            <input
-              type="search"
-              className="sidebar-search-input"
-              placeholder="Cari obrolan"
-              value={dmSearch}
-              onChange={(e) => setDmSearch(e.target.value)}
-            />
+        <>
+          {activeSnapStories.length > 0 && (
+            <div className="stories-strip" aria-label="Quick Snap 24 Jam">
+              {activeSnapStories.map((snap, idx) => {
+                const author = profiles[snap.senderId];
+                if (!author) return null;
+                const viewed = snap.snapViewedBy?.includes(currentUserId);
+                return (
+                  <button
+                    key={snap.id}
+                    type="button"
+                    className="story-ring-item"
+                    onClick={() => onOpenStory(activeSnapStories, idx)}
+                    title={`Quick Snap dari ${author.displayName}`}
+                  >
+                    <span className={`story-ring-frame ${viewed ? 'viewed' : ''}`}>
+                      <span className="story-ring-inner">
+                        <Avatar
+                          initials={author.initials}
+                          color={author.avatarColor}
+                          variant={author.avatarVariant}
+                          seed={author.id}
+                          avatarUrl={author.avatarUrl}
+                          size="md"
+                        />
+                      </span>
+                    </span>
+                    <span className="story-ring-name">{author.displayName}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="sidebar-search-wrap">
+            <div className="sidebar-search-box">
+              <Search size={15} strokeWidth={1.75} className="sidebar-search-icon" />
+              <input
+                type="search"
+                className="sidebar-search-input"
+                placeholder="Cari obrolan"
+                value={dmSearch}
+                onChange={(e) => setDmSearch(e.target.value)}
+              />
+            </div>
+            <div className="filter-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dmFilter === 'all'}
+                className={`filter-tab ${dmFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setDmFilter('all')}
+              >
+                Semua
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dmFilter === 'unread'}
+                className={`filter-tab ${dmFilter === 'unread' ? 'active' : ''}`}
+                onClick={() => setDmFilter('unread')}
+              >
+                Belum Dibaca
+              </button>
+            </div>
           </div>
-          <div className="filter-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={dmFilter === 'all'}
-              className={`filter-tab ${dmFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setDmFilter('all')}
-            >
-              Semua
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={dmFilter === 'unread'}
-              className={`filter-tab ${dmFilter === 'unread' ? 'active' : ''}`}
-              onClick={() => setDmFilter('unread')}
-            >
-              Belum Dibaca
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Quick Start DM Contact Picker */}
@@ -399,6 +502,8 @@ export function ChannelSidebar({
                       <Avatar
                         initials={partner.initials}
                         color={partner.avatarColor}
+                        variant={partner.avatarVariant}
+                        seed={partner.id}
                         avatarUrl={partner.avatarUrl}
                         size="md"
                         online={partner.isOnline}
@@ -489,8 +594,9 @@ export function ChannelSidebar({
               <div className="voice-group">
                 {circleVoiceLounges.map((lounge) => {
                   const isJoined = activeVoiceLoungeId === lounge.id;
+                  const anyoneSpeaking = lounge.speakingUserIds.length > 0;
                   return (
-                    <div key={lounge.id}>
+                    <div key={lounge.id} className={`voice-lounge-block ${isJoined ? 'joined' : ''}`}>
                       <button
                         id={`voice-toggle-${lounge.id}`}
                         type="button"
@@ -499,6 +605,13 @@ export function ChannelSidebar({
                       >
                         <Volume2 size={16} strokeWidth={1.75} />
                         <span className="channel-row-name">{lounge.name}</span>
+                        {anyoneSpeaking && (
+                          <span className="voice-eq" aria-label="Aktif berbicara">
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        )}
                         <span className="meta-text">{lounge.participantIds.length}</span>
                       </button>
 
@@ -510,20 +623,31 @@ export function ChannelSidebar({
                             const speaking = lounge.speakingUserIds.includes(uid);
                             return (
                               <div key={uid} className="voice-member-item">
-                                <span
-                                  className={`voice-member-avatar ${speaking ? 'speaking' : ''}`}
-                                  style={{ background: p.avatarColor }}
-                                >
-                                  {p.initials}
-                                </span>
+                                <Avatar
+                                  initials={p.initials}
+                                  color={p.avatarColor}
+                                  variant={p.avatarVariant}
+                                  seed={uid}
+                                  avatarUrl={p.avatarUrl}
+                                  size="xs"
+                                  speaking={speaking}
+                                />
                                 <span
                                   style={{
+                                    flex: 1,
                                     color: speaking ? 'var(--text-primary)' : undefined,
-                                    fontWeight: speaking ? 500 : 400,
+                                    fontWeight: speaking ? 600 : 400,
                                   }}
                                 >
                                   {p.displayName}
                                 </span>
+                                {speaking && (
+                                  <span className="voice-eq sm" aria-hidden="true">
+                                    <span />
+                                    <span />
+                                    <span />
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
@@ -550,16 +674,29 @@ export function ChannelSidebar({
                 </div>
                 <div className="voice-room-sub">{activeVoice.name}</div>
               </div>
-              <button
-                type="button"
-                className="icon-btn"
-                style={{ width: 28, height: 28 }}
-                onClick={handleToggleDevices}
-                title="Perangkat audio"
-                aria-label="Perangkat audio"
-              >
-                <SlidersHorizontal size={14} strokeWidth={1.75} />
-              </button>
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button
+                  id="btn-open-voice-stage"
+                  type="button"
+                  className="icon-btn"
+                  style={{ width: 28, height: 28 }}
+                  onClick={onOpenVoiceStage}
+                  title="Buka Voice Stage"
+                  aria-label="Buka Voice Stage"
+                >
+                  <Maximize2 size={14} strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{ width: 28, height: 28 }}
+                  onClick={handleToggleDevices}
+                  title="Perangkat audio"
+                  aria-label="Perangkat audio"
+                >
+                  <SlidersHorizontal size={14} strokeWidth={1.75} />
+                </button>
+              </div>
             </div>
 
             {devicesOpen && (
@@ -629,6 +766,8 @@ export function ChannelSidebar({
             <Avatar
               initials={me.initials}
               color={me.avatarColor}
+              variant={me.avatarVariant}
+              seed={me.id}
               avatarUrl={me.avatarUrl}
               size="sm"
               online={me.isOnline}

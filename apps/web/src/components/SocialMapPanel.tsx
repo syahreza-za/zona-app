@@ -2,15 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
+  Activity,
   Battery,
+  Coffee,
   Crosshair,
   ExternalLink,
   Eye,
   EyeOff,
+  Gamepad2,
   MapPin,
   Plus,
   Search,
   Shield,
+  Utensils,
   X,
 } from 'lucide-react';
 import {
@@ -21,10 +25,11 @@ import {
   resolveVisibleCoordinates,
   useZonaStore,
   type Coordinates,
+  type HangoutCategory,
   type PlaceSuggestion,
   type PrivacyMode,
 } from '@zona/shared';
-import { Avatar } from './Avatar';
+import { Avatar, renderAvatarSvgMarkup, resolveAvatarVariant } from './Avatar';
 import { buildDirectionsUrl, getBrowserGps, searchRealPlaces } from '../services/geocoder';
 
 interface SocialMapPanelProps {
@@ -45,6 +50,16 @@ const BOUNDS = {
   maxLng: 106.828,
 };
 
+export const HANGOUT_CATEGORY_META: Record<
+  HangoutCategory,
+  { color: string; label: string; icon: typeof Coffee }
+> = {
+  coffee: { color: '#D97706', label: 'Kopi', icon: Coffee },
+  food: { color: '#EA580C', label: 'Makan', icon: Utensils },
+  gaming: { color: '#3B82F6', label: 'Santai', icon: Gamepad2 },
+  sport: { color: '#10B981', label: 'Olahraga', icon: Activity },
+};
+
 function projectToPercent(point: Coordinates): { x: number; y: number } {
   const x = ((point.lng - BOUNDS.minLng) / (BOUNDS.maxLng - BOUNDS.minLng)) * 100;
   const y = ((BOUNDS.maxLat - point.lat) / (BOUNDS.maxLat - BOUNDS.minLat)) * 100;
@@ -61,6 +76,79 @@ function unprojectPercent(xPct: number, yPct: number): Coordinates {
     lat: Number(lat.toFixed(5)),
     lng: Number(lng.toFixed(5)),
   };
+}
+
+/**
+ * Restyles OpenFreeMap Liberty vector layers into a rich deep-twilight navy/slate
+ * night cartography (never flat monochrome black-gray) and ensures 3D buildings render.
+ */
+function applyCartographyStyleEnhancements(map: maplibregl.Map, theme: 'dark' | 'light') {
+  const style = map.getStyle();
+  if (!style?.layers) return;
+
+  if (theme === 'dark') {
+    for (const layer of style.layers) {
+      const id = layer.id.toLowerCase();
+      try {
+        if (layer.type === 'background') {
+          map.setPaintProperty(layer.id, 'background-color', '#141B29');
+        } else if (layer.type === 'fill') {
+          if (id.includes('water') || id.includes('river') || id.includes('ocean')) {
+            map.setPaintProperty(layer.id, 'fill-color', '#0D1626');
+          } else if (
+            id.includes('park') ||
+            id.includes('grass') ||
+            id.includes('wood') ||
+            id.includes('forest') ||
+            id.includes('green') ||
+            id.includes('landcover')
+          ) {
+            map.setPaintProperty(layer.id, 'fill-color', '#172B24');
+          } else if (id.includes('building')) {
+            map.setPaintProperty(layer.id, 'fill-color', '#212D40');
+            map.setPaintProperty(layer.id, 'fill-opacity', 0.85);
+          } else if (id.includes('landuse') || id.includes('residential') || id.includes('urban')) {
+            map.setPaintProperty(layer.id, 'fill-color', '#1A2334');
+          }
+        } else if (layer.type === 'fill-extrusion') {
+          map.setPaintProperty(layer.id, 'fill-extrusion-color', '#253348');
+          map.setPaintProperty(layer.id, 'fill-extrusion-opacity', 0.82);
+        } else if (layer.type === 'line') {
+          if (id.includes('water') || id.includes('river')) {
+            map.setPaintProperty(layer.id, 'line-color', '#0D1626');
+          } else if (
+            id.includes('motorway') ||
+            id.includes('trunk') ||
+            id.includes('primary')
+          ) {
+            map.setPaintProperty(layer.id, 'line-color', '#364966');
+          } else if (id.includes('road') || id.includes('street') || id.includes('highway') || id.includes('secondary')) {
+            map.setPaintProperty(layer.id, 'line-color', '#293548');
+          } else if (id.includes('boundary') || id.includes('admin')) {
+            map.setPaintProperty(layer.id, 'line-color', 'rgba(148, 163, 184, 0.22)');
+          }
+        } else if (layer.type === 'symbol') {
+          map.setPaintProperty(layer.id, 'text-color', '#CBD5E1');
+          map.setPaintProperty(layer.id, 'text-halo-color', '#0F172A');
+          map.setPaintProperty(layer.id, 'text-halo-width', 1.4);
+        }
+      } catch {
+        // Ignore paint properties unsupported on specific vector layers
+      }
+    }
+  } else {
+    // Boost 3D buildings warmly in Light Mode if present
+    for (const layer of style.layers) {
+      if (layer.type === 'fill-extrusion') {
+        try {
+          map.setPaintProperty(layer.id, 'fill-extrusion-color', '#E8E3D9');
+          map.setPaintProperty(layer.id, 'fill-extrusion-opacity', 0.82);
+        } catch {
+          // Ignore
+        }
+      }
+    }
+  }
 }
 
 export function SocialMapPanel({
@@ -123,11 +211,26 @@ export function SocialMapPanel({
   }, [locations, blockedUserIds, circles, circleFilter, profiles]);
 
   const clusters = useMemo(
-    () => clusterMapMarkers(visibleFriends, 260),
+    () => clusterMapMarkers(visibleFriends, 220),
     [visibleFriends]
   );
 
-  // Place search via Photon OpenStreetMap
+  // Detect Hangout Pins with 2+ friends nearby (within 900m) for warm Gathering Halo
+  const gatheringPinIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const pin of hangoutPins) {
+      let nearbyCount = 0;
+      for (const friend of visibleFriends) {
+        if (friend.visiblePoint && distanceMeters(pin.point, friend.visiblePoint) <= 900) {
+          nearbyCount += 1;
+        }
+      }
+      if (nearbyCount >= 2) set.add(pin.id);
+    }
+    return set;
+  }, [hangoutPins, visibleFriends]);
+
+  // Photon OpenStreetMap place search
   useEffect(() => {
     const q = placeQuery.trim();
     if (q.length < 2) {
@@ -145,17 +248,15 @@ export function SocialMapPanel({
     };
   }, [placeQuery, myLocation?.point]);
 
-  // MapLibre GL initialization synced with Light/Dark theme
+  // MapLibre GL 3D Perspective Cartography (Liberty Light + Rich Twilight Night)
   useEffect(() => {
     if (!useVectorMap || !mapHostRef.current) return;
 
     const styleUrl =
       import.meta.env.VITE_MAP_STYLE_URL ||
-      (theme === 'dark'
-        ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-        : 'https://tiles.openfreemap.org/styles/positron');
+      'https://tiles.openfreemap.org/styles/liberty';
 
-    const centerPoint = myLocation?.point ?? { lat: -6.248, lng: 106.8065 };
+    const centerPoint = myLocation?.point ?? { lat: -6.249, lng: 106.807 };
     let map: maplibregl.Map;
 
     try {
@@ -163,7 +264,9 @@ export function SocialMapPanel({
         container: mapHostRef.current,
         style: styleUrl,
         center: [centerPoint.lng, centerPoint.lat],
-        zoom: 13.1,
+        zoom: 13.4,
+        pitch: 42,
+        bearing: -12,
         attributionControl: false,
       });
     } catch {
@@ -174,9 +277,13 @@ export function SocialMapPanel({
     let tileErrorCount = 0;
     map.on('error', () => {
       tileErrorCount += 1;
-      if (tileErrorCount >= 2) {
+      if (tileErrorCount >= 3) {
         setUseVectorMap(false);
       }
+    });
+
+    map.on('style.load', () => {
+      applyCartographyStyleEnhancements(map, theme);
     });
 
     map.on('click', (evt) => {
@@ -198,7 +305,7 @@ export function SocialMapPanel({
     };
   }, [useVectorMap, theme]);
 
-  // Sync markers on MapLibre GL
+  // Sync illustrated character pins, Gathering Halo, and categorized Hangout Pins on MapLibre
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !useVectorMap) return;
@@ -206,12 +313,21 @@ export function SocialMapPanel({
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
+    // 1. Gathering Halo rings under active hangout hotspots
+    hangoutPins.forEach((pin) => {
+      if (!gatheringPinIds.has(pin.id)) return;
+      const haloEl = document.createElement('div');
+      haloEl.className = 'gathering-halo-pulse';
+      const haloMarker = new maplibregl.Marker({ element: haloEl })
+        .setLngLat([pin.point.lng, pin.point.lat])
+        .addTo(map);
+      markersRef.current.push(haloMarker);
+    });
+
+    // 2. Friend Markers with illustrated character SVG + 3px white frame + downward pointer tail
     clusters.forEach((cluster) => {
       const el = document.createElement('div');
-      el.style.display = 'flex';
-      el.style.flexDirection = 'column';
-      el.style.alignItems = 'center';
-      el.style.cursor = 'pointer';
+      el.className = 'social-pin-root';
 
       if (cluster.isCluster) {
         const badge = document.createElement('div');
@@ -220,7 +336,7 @@ export function SocialMapPanel({
         el.appendChild(badge);
         el.onclick = (e) => {
           e.stopPropagation();
-          map.flyTo({ center: [cluster.point.lng, cluster.point.lat], zoom: 15.2 });
+          map.flyTo({ center: [cluster.point.lng, cluster.point.lat], zoom: 15.2, pitch: 48 });
         };
       } else {
         const entry = cluster.items[0];
@@ -229,15 +345,29 @@ export function SocialMapPanel({
           halo.className = 'map-fuzzy-halo';
           el.appendChild(halo);
         }
-        const ring = document.createElement('div');
-        ring.className = 'map-marker-ring';
-        ring.style.background = entry.profile.avatarColor;
-        ring.textContent = entry.profile.initials;
-        el.appendChild(ring);
+
+        const pinHead = document.createElement('div');
+        pinHead.className = 'social-pin-head';
+        if (entry.profile.avatarUrl) {
+          const img = document.createElement('img');
+          img.src = entry.profile.avatarUrl;
+          img.alt = entry.profile.displayName;
+          pinHead.appendChild(img);
+        } else {
+          const v = resolveAvatarVariant(entry.profile.avatarVariant, entry.userId);
+          pinHead.innerHTML = renderAvatarSvgMarkup(v);
+        }
+        el.appendChild(pinHead);
+
+        const tail = document.createElement('div');
+        tail.className = 'social-pin-tail';
+        el.appendChild(tail);
 
         const tag = document.createElement('span');
         tag.className = 'map-marker-tag';
-        tag.textContent = entry.profile.displayName;
+        tag.textContent = entry.loc.activityEmoji
+          ? `${entry.loc.activityEmoji} ${entry.profile.displayName}`
+          : entry.profile.displayName;
         el.appendChild(tag);
 
         el.onclick = (e) => {
@@ -247,43 +377,57 @@ export function SocialMapPanel({
         };
       }
 
-      const marker = new maplibregl.Marker({ element: el })
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([cluster.point.lng, cluster.point.lat])
         .addTo(map);
       markersRef.current.push(marker);
     });
 
+    // 3. Categorized Hangout Pins
     hangoutPins.forEach((pin) => {
+      const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
       const el = document.createElement('button');
       el.type = 'button';
       el.className = `hangout-pin-pill ${highlightedPinId === pin.id ? 'highlighted' : ''}`;
       el.style.position = 'static';
       el.style.transform = 'none';
+      el.style.background = cat.color;
+      el.style.boxShadow = `0 6px 18px ${cat.color}55`;
       el.textContent = pin.placeName;
       el.onclick = (e) => {
         e.stopPropagation();
         selectChannel(pin.channelId);
         onSelectHangoutChannel?.();
       };
-      const marker = new maplibregl.Marker({ element: el })
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([pin.point.lng, pin.point.lat])
         .addTo(map);
       markersRef.current.push(marker);
     });
-  }, [clusters, hangoutPins, highlightedPinId, useVectorMap, selectChannel, setSelectedMapUser, onSelectHangoutChannel]);
+  }, [
+    clusters,
+    hangoutPins,
+    gatheringPinIds,
+    highlightedPinId,
+    useVectorMap,
+    selectChannel,
+    setSelectedMapUser,
+    onSelectHangoutChannel,
+  ]);
 
   const handleRecenterGps = async () => {
     setLocating(true);
     try {
       const gps = await getBrowserGps();
       updateMyCoordinates(gps, 'Lokasi Saat Ini');
-      mapRef.current?.flyTo({ center: [gps.lng, gps.lat], zoom: 14.5 });
+      mapRef.current?.flyTo({ center: [gps.lng, gps.lat], zoom: 14.6, pitch: 44 });
       onNotify('Lokasi diperbarui dari GPS.');
     } catch {
       if (myLocation) {
         mapRef.current?.flyTo({
           center: [myLocation.point.lng, myLocation.point.lat],
-          zoom: 13.8,
+          zoom: 14,
+          pitch: 42,
         });
       }
       onNotify('Memusatkan peta ke posisi terakhir.');
@@ -331,10 +475,10 @@ export function SocialMapPanel({
 
   return (
     <section className="map-panel" aria-label="Peta Sosial">
-      {/* Edge-to-edge full-bleed map canvas */}
       {useVectorMap ? (
         <div ref={mapHostRef} className="map-canvas-full" />
       ) : (
+        /* Rich Illustrated Zenly / Apple-Maps Offline Fallback */
         <div
           id="fallback-social-map"
           className="map-fallback-canvas"
@@ -342,62 +486,105 @@ export function SocialMapPanel({
         >
           <svg className="map-fallback-svg" viewBox="0 0 600 600" preserveAspectRatio="none">
             <rect
-              x="310"
-              y="80"
-              width="120"
-              height="90"
-              rx="18"
-              fill={theme === 'dark' ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.12)'}
+              width="600"
+              height="600"
+              fill={theme === 'dark' ? '#141B29' : '#F3EFE6'}
             />
-            <rect
-              x="120"
-              y="340"
-              width="140"
-              height="100"
-              rx="22"
-              fill={theme === 'dark' ? 'rgba(16,185,129,0.07)' : 'rgba(16,185,129,0.1)'}
+            {/* Organic green parks */}
+            <path
+              d="M 290 60 C 350 40 430 65 445 125 C 455 165 395 190 340 175 C 285 160 250 95 290 60 Z"
+              fill={theme === 'dark' ? '#172B24' : '#CBE8C8'}
             />
             <path
-              d="M 0 130 Q 220 155 600 95"
-              stroke={theme === 'dark' ? 'rgba(255,255,255,0.11)' : '#ffffff'}
-              strokeWidth="9"
+              d="M 75 310 C 145 290 220 320 225 385 C 230 440 155 465 95 440 C 45 415 35 335 75 310 Z"
+              fill={theme === 'dark' ? '#172B24' : '#D2EBCF'}
+            />
+            <path
+              d="M 420 420 C 480 400 560 430 570 495 C 580 545 500 570 445 545 C 400 520 385 445 420 420 Z"
+              fill={theme === 'dark' ? '#172B24' : '#CBE8C8'}
+            />
+            {/* Winding blue river */}
+            <path
+              d="M -20 495 C 120 455 210 380 315 295 C 405 225 495 155 620 120"
+              stroke={theme === 'dark' ? '#0D1626' : '#A8D5F2'}
+              strokeWidth="26"
+              strokeLinecap="round"
               fill="none"
             />
             <path
-              d="M 140 0 Q 175 290 250 600"
-              stroke={theme === 'dark' ? 'rgba(255,255,255,0.12)' : '#ffffff'}
-              strokeWidth="10"
+              d="M -20 495 C 120 455 210 380 315 295 C 405 225 495 155 620 120"
+              stroke={theme === 'dark' ? '#152540' : '#CBE7F8'}
+              strokeWidth="12"
+              strokeLinecap="round"
               fill="none"
             />
-            <path
-              d="M 415 0 Q 385 280 465 600"
-              stroke={theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#ffffff'}
-              strokeWidth="8"
+            {/* Subtle urban building footprints */}
+            <g fill={theme === 'dark' ? '#1F2A3D' : '#E7E1D4'}>
+              <rect x="170" y="155" width="46" height="30" rx="6" />
+              <rect x="230" y="195" width="38" height="44" rx="6" />
+              <rect x="330" y="215" width="52" height="32" rx="6" />
+              <rect x="260" y="340" width="56" height="36" rx="6" />
+              <rect x="360" y="370" width="48" height="42" rx="6" />
+              <rect x="465" y="250" width="54" height="34" rx="6" />
+            </g>
+            {/* Secondary local streets */}
+            <g
+              stroke={theme === 'dark' ? '#243248' : '#FFFFFF'}
+              strokeWidth="4.5"
               fill="none"
-            />
-            <path
-              d="M 0 365 Q 295 335 600 410"
-              stroke={theme === 'dark' ? 'rgba(255,255,255,0.09)' : '#ffffff'}
-              strokeWidth="7"
+              opacity="0.85"
+            >
+              <path d="M 30 220 Q 260 235 560 215" />
+              <path d="M 60 390 Q 290 365 570 430" />
+              <path d="M 245 20 Q 255 280 280 590" />
+              <path d="M 495 20 Q 470 290 520 590" />
+            </g>
+            {/* Major arterial avenues */}
+            <g
+              stroke={theme === 'dark' ? '#364966' : '#FFFDF9'}
+              strokeWidth="11"
+              strokeLinecap="round"
               fill="none"
-            />
+            >
+              <path d="M -10 130 Q 230 155 610 92" />
+              <path d="M 140 -10 Q 178 290 252 610" />
+              <path d="M 412 -10 Q 382 280 462 610" />
+            </g>
             <path
-              d="M 80 230 L 540 245"
-              stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.06)'}
-              strokeWidth="3"
+              d="M -10 130 Q 230 155 610 92"
+              stroke={theme === 'dark' ? '#475D80' : '#FCD34D'}
+              strokeWidth="2.2"
               fill="none"
+              opacity="0.7"
             />
           </svg>
 
-          <span className="map-area-label" style={{ left: '54%', top: '18%' }}>
+          <span className="map-area-label" style={{ left: '54%', top: '16%' }}>
             SENOPATI · SCBD
           </span>
           <span className="map-area-label" style={{ left: '16%', top: '44%' }}>
             BLOK M
           </span>
           <span className="map-area-label" style={{ left: '58%', top: '68%' }}>
-            KEMANG
+            KEMANG RAYA
           </span>
+
+          {hangoutPins.map((pin) => {
+            if (!gatheringPinIds.has(pin.id)) return null;
+            const pos = projectToPercent(pin.point);
+            return (
+              <div
+                key={`halo-${pin.id}`}
+                className="gathering-halo-pulse"
+                style={{
+                  position: 'absolute',
+                  left: `${pos.x}%`,
+                  top: `${pos.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              />
+            );
+          })}
 
           {clusters.map((cluster) => {
             const pos = projectToPercent(cluster.point);
@@ -420,6 +607,7 @@ export function SocialMapPanel({
 
             const entry = cluster.items[0];
             const isSelected = selectedMapUserId === entry.userId;
+            const v = resolveAvatarVariant(entry.profile.avatarVariant, entry.userId);
             return (
               <div
                 key={entry.userId}
@@ -432,32 +620,47 @@ export function SocialMapPanel({
                 }}
               >
                 {entry.loc.privacyMode === 'fuzzy' && <div className="map-fuzzy-halo" />}
-                <div
-                  className="map-marker-ring"
-                  style={{ background: entry.profile.avatarColor }}
-                >
-                  {entry.profile.initials}
+                <div className="social-pin-head">
+                  {entry.profile.avatarUrl ? (
+                    <img src={entry.profile.avatarUrl} alt={entry.profile.displayName} />
+                  ) : (
+                    <span
+                      className="avatar-svg-host"
+                      dangerouslySetInnerHTML={{ __html: renderAvatarSvgMarkup(v) }}
+                    />
+                  )}
                 </div>
-                <span className="map-marker-tag">{entry.profile.displayName}</span>
+                <div className="social-pin-tail" />
+                <span className="map-marker-tag">
+                  {entry.loc.activityEmoji ? `${entry.loc.activityEmoji} ` : ''}
+                  {entry.profile.displayName}
+                </span>
               </div>
             );
           })}
 
           {hangoutPins.map((pin) => {
             const pos = projectToPercent(pin.point);
+            const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
+            const CatIcon = cat.icon;
             return (
               <button
                 key={pin.id}
                 type="button"
                 className={`hangout-pin-pill ${highlightedPinId === pin.id ? 'highlighted' : ''}`}
-                style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                style={{
+                  left: `${pos.x}%`,
+                  top: `${pos.y}%`,
+                  background: cat.color,
+                  boxShadow: `0 6px 18px ${cat.color}55`,
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   selectChannel(pin.channelId);
                   onSelectHangoutChannel?.();
                 }}
               >
-                <MapPin size={13} strokeWidth={2} />
+                <CatIcon size={13} strokeWidth={2} />
                 <span>{pin.placeName}</span>
               </button>
             );
@@ -465,7 +668,7 @@ export function SocialMapPanel({
         </div>
       )}
 
-      {/* Floating Top Glass Controls (Search + Circle Filter + Ghost/Privacy Pill) */}
+      {/* Floating Top Glass Controls */}
       <div className="map-float-top">
         <div className="map-search-cluster">
           <div className="map-glass-pill" style={{ width: '100%' }}>
@@ -500,6 +703,7 @@ export function SocialMapPanel({
                     mapRef.current?.flyTo({
                       center: [place.point.lng, place.point.lat],
                       zoom: 15,
+                      pitch: 45,
                     });
                     onRequestPinAt(place.point, place.name);
                   }}
@@ -570,7 +774,7 @@ export function SocialMapPanel({
         </div>
       </div>
 
-      {/* Floating Bottom-Right Action Pills (Recenter GPS & Create Pin) */}
+      {/* Floating Bottom-Right Action Pills */}
       <div className="map-float-right">
         <button
           type="button"
@@ -625,7 +829,6 @@ export function SocialMapPanel({
             <span className="meta-text">{hangoutPins.length} pin kumpul</span>
           </div>
 
-          {/* Horizontal friend chips visible even in Peek */}
           <div className="sheet-friend-strip">
             {visibleFriends.map(({ userId, loc, profile }) => (
               <button
@@ -637,11 +840,19 @@ export function SocialMapPanel({
                   setSheetSnap('half');
                   mapRef.current?.flyTo({
                     center: [loc.point.lng, loc.point.lat],
-                    zoom: 14.5,
+                    zoom: 14.8,
+                    pitch: 45,
                   });
                 }}
               >
-                <Avatar initials={profile.initials} color={profile.avatarColor} size="xs" />
+                <Avatar
+                  initials={profile.initials}
+                  color={profile.avatarColor}
+                  variant={profile.avatarVariant}
+                  seed={userId}
+                  avatarUrl={profile.avatarUrl}
+                  size="xs"
+                />
                 <div>
                   <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.2 }}>
                     {profile.displayName}
@@ -654,7 +865,6 @@ export function SocialMapPanel({
             ))}
           </div>
 
-          {/* Selected Friend Detail Card (visible in Half & Expanded) */}
           {sheetSnap !== 'peek' && selectedEntry && selectedEntry.visiblePoint && myLocation && (
             <div className="sheet-detail-row">
               <div style={{ minWidth: 0 }}>
@@ -698,39 +908,41 @@ export function SocialMapPanel({
             </div>
           )}
 
-          {/* Active Hangout Pins list (visible in Half & Expanded) */}
           {sheetSnap !== 'peek' &&
-            hangoutPins.map((pin) => (
-              <div key={pin.id} className="sheet-detail-row">
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 13.5,
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
+            hangoutPins.map((pin) => {
+              const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
+              return (
+                <div key={pin.id} className="sheet-detail-row">
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 13.5,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <MapPin size={14} strokeWidth={1.75} color={cat.color} />
+                      <span>{pin.placeName}</span>
+                    </div>
+                    <div className="meta-text" style={{ marginTop: 2 }}>
+                      {pin.title} · {pin.startsAtLabel} · {pin.rsvps.length} respon
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-link-btn"
+                    onClick={() => {
+                      selectChannel(pin.channelId);
+                      onSelectHangoutChannel?.();
                     }}
                   >
-                    <MapPin size={14} strokeWidth={1.75} color="var(--accent)" />
-                    <span>{pin.placeName}</span>
-                  </div>
-                  <div className="meta-text" style={{ marginTop: 2 }}>
-                    {pin.title} · {pin.startsAtLabel} · {pin.rsvps.length} respon
-                  </div>
+                    Buka Kanal
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="inline-link-btn"
-                  onClick={() => {
-                    selectChannel(pin.channelId);
-                    onSelectHangoutChannel?.();
-                  }}
-                >
-                  Buka Kanal
-                </button>
-              </div>
-            ))}
+              );
+            })}
         </div>
       </div>
     </section>

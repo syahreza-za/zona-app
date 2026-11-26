@@ -10,8 +10,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useZonaStore, type PrivacyMode, type ZonaCloudBackend } from '@zona/shared';
-import { Avatar } from './Avatar';
+import {
+  useZonaStore,
+  type ChatWallpaperTheme,
+  type PrivacyMode,
+  type ZonaCloudBackend,
+} from '@zona/shared';
+import { AVATAR_VARIANT_COUNT, Avatar } from './Avatar';
 import { clearWorkspaceSnapshot } from '../services/offlineDb';
 import { compressImageFile } from '../services/mediaTools';
 
@@ -24,7 +29,19 @@ interface ProfileSettingsModalProps {
   onNotify: (msg: string) => void;
 }
 
-const COLORS = ['#10B981', '#2563EB', '#EA580C', '#0891B2', '#E11D48', '#475569'];
+const COLORS = ['#10B981', '#EA580C', '#0EA5E9', '#D97706', '#E11D48', '#0D9488'];
+
+const CHAT_THEMES: Array<{
+  id: ChatWallpaperTheme;
+  label: string;
+  swatchLight: string;
+  swatchDark: string;
+}> = [
+  { id: 'clean', label: 'Default Clean', swatchLight: '#EEF3F0', swatchDark: '#252932' },
+  { id: 'warm-sand', label: 'Warm Sand', swatchLight: '#F4F1EA', swatchDark: '#262320' },
+  { id: 'ocean-mist', label: 'Ocean Mist', swatchLight: '#ECF4F8', swatchDark: '#1C2632' },
+  { id: 'midnight-forest', label: 'Midnight Forest', swatchLight: '#E8F2EC', swatchDark: '#172320' },
+];
 
 export function ProfileSettingsModal({
   theme,
@@ -40,6 +57,8 @@ export function ProfileSettingsModal({
     locations,
     blockedUserIds,
     backendMode,
+    chatTheme,
+    setChatTheme,
     updateMyProfile,
     setMyPrivacyMode,
     unblockUser,
@@ -54,6 +73,7 @@ export function ProfileSettingsModal({
   const [username, setUsername] = useState(me?.username ?? 'syahreza');
   const [statusEmoji, setStatusEmoji] = useState(me?.statusEmoji ?? '☕');
   const [statusText, setStatusText] = useState(me?.statusText ?? '');
+  const [avatarVariant, setAvatarVariant] = useState(me?.avatarVariant ?? 0);
   const [avatarColor, setAvatarColor] = useState(me?.avatarColor ?? COLORS[0]);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(me?.avatarUrl);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -77,6 +97,7 @@ export function ProfileSettingsModal({
       statusEmoji,
       statusText,
       avatarColor,
+      avatarVariant,
       avatarUrl,
     });
     onNotify('Profil diperbarui.');
@@ -117,12 +138,14 @@ export function ProfileSettingsModal({
           <Avatar
             initials={me?.initials ?? 'RZ'}
             color={avatarColor}
+            variant={avatarVariant}
+            seed={currentUserId}
             avatarUrl={avatarUrl}
             size="lg"
             online
             showPresence
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <label className="btn-secondary" style={{ height: 30, fontSize: 12.5, cursor: 'pointer' }}>
               <Camera size={13} strokeWidth={1.75} />
               <span>Ganti Foto</span>
@@ -134,23 +157,32 @@ export function ProfileSettingsModal({
               />
             </label>
             <div style={{ display: 'flex', gap: 6 }}>
-              {COLORS.map((c) => (
+              {Array.from({ length: AVATAR_VARIANT_COUNT }).map((_, idx) => (
                 <button
-                  key={c}
+                  key={idx}
                   type="button"
                   onClick={() => {
                     setAvatarUrl(undefined);
-                    setAvatarColor(c);
+                    setAvatarVariant(idx);
+                    setAvatarColor(COLORS[idx % COLORS.length]);
                   }}
                   style={{
-                    width: 22,
-                    height: 22,
                     borderRadius: 99,
-                    background: c,
-                    outline: !avatarUrl && avatarColor === c ? '2px solid var(--text-primary)' : 'none',
-                    outlineOffset: 2,
+                    padding: 1,
+                    outline:
+                      !avatarUrl && avatarVariant === idx
+                        ? '2px solid var(--accent)'
+                        : 'none',
+                    outlineOffset: 1,
                   }}
-                />
+                >
+                  <Avatar
+                    initials={me?.initials ?? 'RZ'}
+                    color={COLORS[idx % COLORS.length]}
+                    variant={idx}
+                    size="xs"
+                  />
+                </button>
               ))}
             </div>
           </div>
@@ -203,17 +235,42 @@ export function ProfileSettingsModal({
 
       <div className="settings-divider" />
 
-      {/* Appearance & Default Map Privacy */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Appearance & 4 Chat Wallpaper Themes */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 13.5, fontWeight: 600 }}>Tampilan</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>Mode Tampilan</div>
             <div className="meta-text">{theme === 'dark' ? 'Mode Gelap' : 'Mode Terang'}</div>
           </div>
           <button type="button" className="btn-secondary" style={{ height: 34 }} onClick={onToggleTheme}>
             {theme === 'dark' ? <Sun size={15} strokeWidth={1.75} /> : <Moon size={15} strokeWidth={1.75} />}
             <span>{theme === 'dark' ? 'Terang' : 'Gelap'}</span>
           </button>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>Tema Wallpaper Chat</div>
+          <div className="chat-theme-grid">
+            {CHAT_THEMES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`chat-theme-opt ${chatTheme === item.id ? 'selected' : ''}`}
+                onClick={() => {
+                  setChatTheme(item.id);
+                  onNotify(`Tema chat: ${item.label}`);
+                }}
+              >
+                <span
+                  className="chat-theme-swatch"
+                  style={{
+                    background: theme === 'dark' ? item.swatchDark : item.swatchLight,
+                  }}
+                />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
