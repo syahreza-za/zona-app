@@ -2645,18 +2645,18 @@ textarea:focus-visible {
 
 /* Warm Gathering Halo (2+ friends near a Hangout Pin) */
 .gathering-halo-pulse {
-  width: 112px;
-  height: 112px;
+  width: 144px;
+  height: 144px;
   border-radius: 999px;
   background: radial-gradient(
     circle,
-    rgba(245, 158, 11, 0.34) 0%,
-    rgba(234, 88, 12, 0.14) 55%,
-    rgba(234, 88, 12, 0) 75%
+    rgba(245, 158, 11, 0.42) 0%,
+    rgba(234, 88, 12, 0.2) 52%,
+    rgba(234, 88, 12, 0) 76%
   );
-  border: 1.5px solid rgba(245, 158, 11, 0.42);
+  border: 2px solid rgba(245, 158, 11, 0.56);
   pointer-events: none;
-  animation: halo-ripple 3s ease-in-out infinite;
+  animation: halo-ripple 2.8s ease-in-out infinite;
 }
 
 .map-fuzzy-halo {
@@ -3201,7 +3201,7 @@ textarea:focus-visible {
 
 .zona-toast {
   position: fixed;
-  top: 14px;
+  top: 68px;
   left: 50%;
   transform: translateX(-50%);
   padding: 8px 15px;
@@ -3213,6 +3213,7 @@ textarea:focus-visible {
   box-shadow: var(--shadow-popover);
   z-index: 80;
   max-width: calc(100vw - 32px);
+  pointer-events: none;
 }
 
 /* ============================================================================

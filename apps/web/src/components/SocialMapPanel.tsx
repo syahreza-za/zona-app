@@ -313,12 +313,15 @@ export function SocialMapPanel({
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    // 1. Gathering Halo rings under active hangout hotspots
+    // 1. Gathering Halo rings under active hangout hotspots (outer wrapper preserves MapLibre transform)
     hangoutPins.forEach((pin) => {
       if (!gatheringPinIds.has(pin.id)) return;
+      const haloWrap = document.createElement('div');
+      haloWrap.style.pointerEvents = 'none';
       const haloEl = document.createElement('div');
       haloEl.className = 'gathering-halo-pulse';
-      const haloMarker = new maplibregl.Marker({ element: haloEl })
+      haloWrap.appendChild(haloEl);
+      const haloMarker = new maplibregl.Marker({ element: haloWrap, anchor: 'center' })
         .setLngLat([pin.point.lng, pin.point.lat])
         .addTo(map);
       markersRef.current.push(haloMarker);
@@ -383,9 +386,21 @@ export function SocialMapPanel({
       markersRef.current.push(marker);
     });
 
-    // 3. Categorized Hangout Pins
+    // 3. Categorized Hangout Pins with crisp monochrome category icon
+    const categoryIconSvg: Record<HangoutCategory, string> = {
+      coffee:
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>',
+      food:
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>',
+      gaming:
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/></svg>',
+      sport:
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>',
+    };
+
     hangoutPins.forEach((pin) => {
-      const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
+      const catKey = pin.category ?? 'coffee';
+      const cat = HANGOUT_CATEGORY_META[catKey];
       const el = document.createElement('button');
       el.type = 'button';
       el.className = `hangout-pin-pill ${highlightedPinId === pin.id ? 'highlighted' : ''}`;
@@ -393,7 +408,7 @@ export function SocialMapPanel({
       el.style.transform = 'none';
       el.style.background = cat.color;
       el.style.boxShadow = `0 6px 18px ${cat.color}55`;
-      el.textContent = pin.placeName;
+      el.innerHTML = `${categoryIconSvg[catKey]}<span>${pin.placeName.replace(/</g, '&lt;')}</span>`;
       el.onclick = (e) => {
         e.stopPropagation();
         selectChannel(pin.channelId);

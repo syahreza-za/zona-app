@@ -605,14 +605,37 @@ export function ChannelSidebar({
                       >
                         <Volume2 size={16} strokeWidth={1.75} />
                         <span className="channel-row-name">{lounge.name}</span>
+                        {lounge.participantIds.length > 0 && (
+                          <span className="avatar-stack" aria-hidden="true">
+                            {lounge.participantIds.slice(0, 3).map((uid) => {
+                              const p = profiles[uid];
+                              if (!p) return null;
+                              return (
+                                <span
+                                  key={uid}
+                                  className="avatar-stack-item"
+                                  style={{ borderColor: 'var(--bg-sidebar)' }}
+                                >
+                                  <Avatar
+                                    initials={p.initials}
+                                    color={p.avatarColor}
+                                    variant={p.avatarVariant}
+                                    seed={uid}
+                                    avatarUrl={p.avatarUrl}
+                                    size="xs"
+                                  />
+                                </span>
+                              );
+                            })}
+                          </span>
+                        )}
                         {anyoneSpeaking && (
-                          <span className="voice-eq" aria-label="Aktif berbicara">
+                          <span className="voice-eq sm" aria-label="Aktif berbicara">
                             <span />
                             <span />
                             <span />
                           </span>
                         )}
-                        <span className="meta-text">{lounge.participantIds.length}</span>
                       </button>
 
                       {lounge.participantIds.length > 0 && (
