@@ -549,8 +549,8 @@ export function SocialMapPanel({
           <img
             src={
               theme === 'dark'
-                ? '/media/minimap-kemang-dark.webp'
-                : '/media/minimap-kemang-light.webp'
+                ? './media/minimap-kemang-dark.webp'
+                : './media/minimap-kemang-light.webp'
             }
             alt="Peta area Kemang dan Blok M"
             className="map-fallback-img"

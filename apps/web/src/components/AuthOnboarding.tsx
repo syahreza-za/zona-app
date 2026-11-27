@@ -188,8 +188,8 @@ export function AuthOnboarding({
               <img
                 src={
                   theme === 'dark'
-                    ? '/media/minimap-kemang-dark.webp'
-                    : '/media/minimap-kemang-light.webp'
+                    ? './media/minimap-kemang-dark.webp'
+                    : './media/minimap-kemang-light.webp'
                 }
                 alt=""
                 className="showcase-map-img"
@@ -209,7 +209,7 @@ export function AuthOnboarding({
             </div>
 
             <div className="showcase-snap-card">
-              <img src="/media/snap-coffee.webp" alt="" className="showcase-snap-img" />
+              <img src="./media/snap-coffee.webp" alt="" className="showcase-snap-img" />
               <span className="showcase-snap-badge">24j</span>
               <span className="showcase-snap-cap">Kopi Tuku · 16.12</span>
             </div>

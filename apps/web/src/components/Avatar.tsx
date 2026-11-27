@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
 export const PRESET_AVATAR_URLS = [
-  '/avatars/reza.webp',
-  '/avatars/nabila.webp',
-  '/avatars/dimas.webp',
-  '/avatars/fajar.webp',
-  '/avatars/tara.webp',
-  '/avatars/guest.webp',
+  './avatars/reza.webp',
+  './avatars/nabila.webp',
+  './avatars/dimas.webp',
+  './avatars/fajar.webp',
+  './avatars/tara.webp',
+  './avatars/guest.webp',
 ] as const;
 
 export const AVATAR_VARIANT_COUNT = PRESET_AVATAR_URLS.length;

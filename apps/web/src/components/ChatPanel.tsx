@@ -831,8 +831,8 @@ export function ChatPanel({
                             <img
                               src={
                                 theme === 'dark'
-                                  ? '/media/minimap-kemang-dark.webp'
-                                  : '/media/minimap-kemang-light.webp'
+                                  ? './media/minimap-kemang-dark.webp'
+                                  : './media/minimap-kemang-light.webp'
                               }
                               alt={`Peta lokasi ${pin.placeName}`}
                               className="hangout-minimap-img"

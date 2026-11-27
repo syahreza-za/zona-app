@@ -19,7 +19,7 @@ export function dispatchDesktopNotification(title: string, body: string): void {
   try {
     new Notification(title, {
       body,
-      icon: '/icon.svg',
+      icon: './icon.svg',
     });
   } catch {
     // Ignore when blocked by platform policy

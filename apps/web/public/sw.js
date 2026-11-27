@@ -1,8 +1,8 @@
-const CACHE_NAME = 'zona-pwa-v1';
+const CACHE_NAME = 'zona-pwa-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/manifest.json', '/icon.svg']))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(['./', './manifest.json', './icon.svg']))
   );
   self.skipWaiting();
 });
