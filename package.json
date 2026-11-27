@@ -1,7 +1,8 @@
 {
   "name": "zona-app",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "packageManager": "pnpm@12.21.0",
   "description": "ZONA — Cross-platform Social Hangout & Circle Messenger (WhatsApp × Discord × Snapchat) for Web/PWA, macOS, Windows, iOS, and Android",
   "scripts": {
     "dev:web": "pnpm --filter @zona/web dev",

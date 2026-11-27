@@ -7,12 +7,12 @@ Panduan ringkas untuk meluncurkan **ZONA** secara real-time lintas perangkat: **
 ## Step 1 — Setup Supabase Cloud Gratis (5 Menit)
 
 1. Buat proyek baru di [supabase.com](https://supabase.com) (pilih region **Singapore `ap-southeast-1`** untuk latensi rendah di Indonesia).
-2. Buka **SQL Editor**, lalu jalankan ketiga file migrasi berikut secara berurutan:
+2. Buka **SQL Editor**, lalu jalankan keempat file migrasi berikut secara berurutan:
    - `supabase/migrations/0001_initial_schema.sql` (tabel inti, PostGIS, RLS, RPC `get_circle_map_members` & `create_hangout_pin`)
    - `supabase/migrations/0002_storage_and_safety.sql` (bucket `zona-media`, reactions, block/report, RPC `create_circle_with_defaults` & `join_circle_by_invite`)
    - `supabase/migrations/0003_delete_account_push_and_cron.sql` (edit/hapus pesan, `push_tokens`, `delete_own_account`, & pembersihan otomatis 24 jam)
-3. Aktifkan **Realtime** di Dashboard Supabase → **Database → Replication** untuk tabel:
-   - `messages`, `channels`, `hangout_pins`, `hangout_rsvps`
+   - `supabase/migrations/0004_rls_fixes_and_realtime.sql` (fungsi `is_circle_member` anti-rekursi RLS, trigger profil otomatis Google/Apple OAuth, policy `channels`/`hangout_rsvps`, & aktivasi otomatis Realtime publication)
+3. Verifikasi di **Database → Replication** bahwa tabel `messages`, `channels`, `hangout_pins`, dan `hangout_rsvps` sudah aktif di publication `supabase_realtime` (otomatis diaktifkan oleh migrasi `0004`).
 4. Aktifkan **Authentication → Providers**:
    - Email/Password (aktif default)
    - Opsional: **Google** & **Apple** OAuth (masukkan URL deploy Web PWA di *Redirect URLs*).
