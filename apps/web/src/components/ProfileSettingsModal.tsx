@@ -30,7 +30,7 @@ interface ProfileSettingsModalProps {
   onNotify: (msg: string) => void;
 }
 
-const COLORS = ['#10B981', '#EA580C', '#0EA5E9', '#D97706', '#E11D48', '#0D9488'];
+const COLORS = ['#E05A3F', '#C2410C', '#0D9488', '#B45309', '#9F1239', '#0F766E'];
 
 const CHAT_THEMES: Array<{
   id: ChatWallpaperTheme;
@@ -38,10 +38,10 @@ const CHAT_THEMES: Array<{
   swatchLight: string;
   swatchDark: string;
 }> = [
-  { id: 'clean', label: 'Default Clean', swatchLight: '#EEF3F0', swatchDark: '#1B1F2A' },
-  { id: 'warm-sand', label: 'Warm Sand', swatchLight: '#F4F1EA', swatchDark: '#201D1A' },
-  { id: 'ocean-mist', label: 'Ocean Mist', swatchLight: '#ECF4F8', swatchDark: '#16202C' },
-  { id: 'midnight-forest', label: 'Midnight Forest', swatchLight: '#E8F2EC', swatchDark: '#131F1C' },
+  { id: 'clean', label: 'Warm Alabaster', swatchLight: '#F7F5F0', swatchDark: '#111012' },
+  { id: 'warm-sand', label: 'Linen Paper', swatchLight: '#F3ECE2', swatchDark: '#1B1715' },
+  { id: 'ocean-mist', label: 'Coastal Fog', swatchLight: '#EEF3F4', swatchDark: '#13191D' },
+  { id: 'midnight-forest', label: 'Sage Stone', swatchLight: '#EFF2EE', swatchDark: '#141917' },
 ];
 
 export function ProfileSettingsModal({

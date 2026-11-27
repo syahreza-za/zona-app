@@ -9,8 +9,9 @@ import {
   Copy,
   ExternalLink,
   Flag,
-  Hash,
+  Headphones,
   Info,
+  Link2,
   Map as MapIcon,
   MapPin,
   Mic,
@@ -34,6 +35,7 @@ import {
   useZonaStore,
   type Message,
   type RsvpStatus,
+  type ZonaCloudBackend,
 } from '@zona/shared';
 import { Avatar } from './Avatar';
 import { QuickSnapModal } from './QuickSnapModal';
@@ -42,14 +44,15 @@ import { HANGOUT_CATEGORY_META } from './SocialMapPanel';
 import { VoiceNoteRecorder } from '../services/mediaTools';
 import { buildDirectionsUrl } from '../services/geocoder';
 import { zonaCloudSync } from '../services/cloudSync';
+import { zonaVoiceEngine } from '../services/livekitVoice';
 
 interface ChatPanelProps {
   theme: 'dark' | 'light';
-  splitMapOpen: boolean;
-  onToggleSplitMap: () => void;
+  cloudBackend: ZonaCloudBackend;
   onBackMobile?: () => void;
   onOpenHangoutModal: () => void;
   onFocusMapPin?: (pinId: string) => void;
+  onOpenVoiceStage?: () => void;
   onNotify: (msg: string) => void;
 }
 
@@ -75,13 +78,20 @@ function formatDuration(sec: number): string {
   return `${m}:${s}`;
 }
 
+function formatTopicLabel(name: string): string {
+  if (name.toLowerCase() === 'umum') return 'Obrolan';
+  return name
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
 export function ChatPanel({
   theme,
-  splitMapOpen,
-  onToggleSplitMap,
+  cloudBackend,
   onBackMobile,
   onOpenHangoutModal,
   onFocusMapPin,
+  onOpenVoiceStage,
   onNotify,
 }: ChatPanelProps) {
   const {
@@ -92,12 +102,18 @@ export function ChatPanel({
     messages,
     locations,
     hangoutPins,
+    voiceLounges,
     blockedUserIds,
     typingUsersByChannel,
     activeChannelId,
+    activeVoiceLoungeId,
     replyToMessageId,
     editingMessageId,
     searchQuery,
+    selectChannel,
+    createChannel,
+    joinVoiceLounge,
+    leaveVoiceLounge,
     sendTextMessage,
     editMessage,
     deleteMessage,
@@ -118,6 +134,8 @@ export function ChatPanel({
   const [infoOpen, setInfoOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [addingTopic, setAddingTopic] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
   const [openMenuMsgId, setOpenMenuMsgId] = useState<string | null>(null);
   const [recordingSec, setRecordingSec] = useState<number | null>(null);
   const [realMicActive, setRealMicActive] = useState(false);
@@ -142,12 +160,27 @@ export function ChatPanel({
   const activeCircle = activeChannel?.circleId
     ? circles.find((c) => c.id === activeChannel.circleId)
     : null;
+  const circleTopics = useMemo(
+    () =>
+      activeCircle
+        ? channels.filter((ch) => ch.circleId === activeCircle.id && !ch.isArchived)
+        : [],
+    [channels, activeCircle]
+  );
+  const circleVoiceLounge = useMemo(
+    () =>
+      activeCircle
+        ? voiceLounges.find((vl) => vl.circleId === activeCircle.id) ?? null
+        : null,
+    [voiceLounges, activeCircle]
+  );
   const dmPartnerId =
     activeChannel?.type === 'dm'
       ? activeChannel.participantIds?.find((id) => id !== currentUserId)
       : undefined;
   const dmPartner = dmPartnerId ? profiles[dmPartnerId] : null;
   const myLoc = locations[currentUserId];
+  const me = profiles[currentUserId];
 
   const rawMessages = useMemo(
     () =>
@@ -358,14 +391,62 @@ export function ChatPanel({
 
   if (!activeChannel) return null;
 
+  const handleCreateTopic = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCircle || !newTopicName.trim()) return;
+    const ch = createChannel(activeCircle.id, newTopicName);
+    void zonaCloudSync.syncCreateChannel(ch);
+    setNewTopicName('');
+    setAddingTopic(false);
+    onNotify(`Topik "${formatTopicLabel(ch.name)}" dibuat.`);
+  };
+
+  const handleCopyCircleInvite = async () => {
+    if (!activeCircle) return;
+    const inviteUrl = `${window.location.origin}${window.location.pathname}?invite=${activeCircle.inviteCode}`;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      onNotify(`Undangan "${activeCircle.name}" disalin (${activeCircle.inviteCode})`);
+    } catch {
+      onNotify(`Kode undangan: ${activeCircle.inviteCode}`);
+    }
+  };
+
+  const handleCircleVoiceClick = async () => {
+    if (!circleVoiceLounge) return;
+    if (activeVoiceLoungeId === circleVoiceLounge.id) {
+      onOpenVoiceStage?.();
+      return;
+    }
+    joinVoiceLounge(circleVoiceLounge.id);
+    const { backendMode, setVoiceSpeakingUsers } = useZonaStore.getState();
+    const res = await zonaVoiceEngine.connect({
+      roomName: circleVoiceLounge.id,
+      circleId: circleVoiceLounge.circleId,
+      participantName: me?.displayName ?? 'Anggota',
+      backendMode,
+      cloudBackend,
+      onActiveSpeakers: (ids) => setVoiceSpeakingUsers(circleVoiceLounge.id, ids),
+      onDisconnected: () => leaveVoiceLounge(),
+    });
+    onNotify(
+      res.mode === 'livekit'
+        ? `Terhubung ke ${circleVoiceLounge.name} (LiveKit)`
+        : `Bergabung ke ${circleVoiceLounge.name}`
+    );
+  };
+
+  const headerTitle = activeCircle ? activeCircle.name : activeChannel.name;
   const headerSubtitle =
     typingUsers.length > 0
       ? `${typingUsers.join(', ')} sedang mengetik...`
       : dmPartner
         ? dmPartner.isOnline
-          ? 'Online'
+          ? `Online · ${dmPartner.statusText}`
           : `Terakhir dilihat ${formatTime(dmPartner.lastSeenAt)}`
-        : activeChannel.topic ?? `${activeCircle?.memberIds.length ?? 0} anggota`;
+        : `${activeCircle?.memberIds.length ?? 0} anggota · ${
+            activeChannel.topic ?? formatTopicLabel(activeChannel.name)
+          }`;
 
   return (
     <main
@@ -375,82 +456,180 @@ export function ChatPanel({
         if (openMenuMsgId) setOpenMenuMsgId(null);
       }}
     >
-      {/* Floating Liquid-Glass Header */}
-      <header className="chat-header">
-        <div className="chat-header-left">
-          {onBackMobile && (
+      {/* Editorial Chat Header + Horizontal Topic Pill Bar (for Circles) */}
+      <div className="chat-header-wrap">
+        <header className="chat-header">
+          <div className="chat-header-left">
+            {onBackMobile && (
+              <button
+                type="button"
+                className="icon-btn mobile-only"
+                onClick={onBackMobile}
+                aria-label="Kembali"
+              >
+                <ArrowLeft size={19} strokeWidth={1.85} />
+              </button>
+            )}
+
+            {dmPartner ? (
+              <Avatar
+                initials={dmPartner.initials}
+                color={dmPartner.avatarColor}
+                variant={dmPartner.avatarVariant}
+                seed={dmPartner.id}
+                avatarUrl={dmPartner.avatarUrl}
+                size="sm"
+                online={dmPartner.isOnline}
+                showPresence
+              />
+            ) : activeCircle ? (
+              <div
+                className="chat-circle-badge"
+                style={{ background: activeCircle.accentColor }}
+              >
+                {activeCircle.bannerImage ? (
+                  <img
+                    src={activeCircle.bannerImage}
+                    alt={activeCircle.name}
+                    className="inbox-circle-img"
+                  />
+                ) : (
+                  <span>{activeCircle.shortCode}</span>
+                )}
+              </div>
+            ) : null}
+
+            <div style={{ minWidth: 0 }}>
+              <h1 className="chat-header-title">{headerTitle}</h1>
+              <p className={`chat-header-sub ${typingUsers.length > 0 ? 'typing' : ''}`}>
+                {headerSubtitle}
+              </p>
+            </div>
+          </div>
+
+          <div className="chat-header-actions">
+            {circleVoiceLounge && (
+              <button
+                type="button"
+                className={`header-voice-chip ${
+                  activeVoiceLoungeId === circleVoiceLounge.id ? 'active' : ''
+                }`}
+                onClick={() => void handleCircleVoiceClick()}
+                title={`Ruang Suara: ${circleVoiceLounge.name}`}
+              >
+                <Headphones size={14} strokeWidth={2} />
+                <span className="desktop-only">{circleVoiceLounge.name}</span>
+                <span className="header-voice-count">{circleVoiceLounge.participantIds.length}</span>
+              </button>
+            )}
+
+            {activeCircle && (
+              <button
+                type="button"
+                className="icon-btn desktop-only"
+                onClick={() => void handleCopyCircleInvite()}
+                title="Salin tautan undangan Circle"
+                aria-label="Salin undangan Circle"
+              >
+                <Link2 size={17} strokeWidth={1.85} />
+              </button>
+            )}
+
             <button
               type="button"
-              className="icon-btn mobile-only"
-              onClick={onBackMobile}
-              aria-label="Kembali"
+              className={`icon-btn ${searchOpen ? 'active' : ''}`}
+              onClick={() => {
+                setSearchOpen((v) => !v);
+                if (searchOpen) setSearchQuery('');
+              }}
+              title="Cari pesan"
+              aria-label="Cari pesan"
             >
-              <ArrowLeft size={19} strokeWidth={1.75} />
+              <Search size={17} strokeWidth={1.85} />
             </button>
-          )}
 
-          {dmPartner ? (
-            <Avatar
-              initials={dmPartner.initials}
-              color={dmPartner.avatarColor}
-              variant={dmPartner.avatarVariant}
-              seed={dmPartner.id}
-              avatarUrl={dmPartner.avatarUrl}
-              size="sm"
-              online={dmPartner.isOnline}
-              showPresence
-            />
-          ) : activeChannel.type === 'hangout' ? (
-            <MapPin size={19} strokeWidth={1.75} color="var(--accent)" />
-          ) : (
-            <Hash size={19} strokeWidth={1.75} color="var(--text-secondary)" />
-          )}
-
-          <div style={{ minWidth: 0 }}>
-            <h1 className="chat-header-title">{activeChannel.name}</h1>
-            <p className={`chat-header-sub ${typingUsers.length > 0 ? 'typing' : ''}`}>
-              {headerSubtitle}
-            </p>
+            <button
+              type="button"
+              className={`icon-btn ${infoOpen ? 'active' : ''}`}
+              onClick={() => setInfoOpen((v) => !v)}
+              title="Info obrolan"
+              aria-label="Info obrolan"
+            >
+              <Info size={17} strokeWidth={1.85} />
+            </button>
           </div>
-        </div>
+        </header>
 
-        <div className="chat-header-actions">
-          <button
-            type="button"
-            className={`icon-btn ${searchOpen ? 'active' : ''}`}
-            onClick={() => {
-              setSearchOpen((v) => !v);
-              if (searchOpen) setSearchQuery('');
-            }}
-            title="Cari pesan"
-            aria-label="Cari pesan"
-          >
-            <Search size={18} strokeWidth={1.75} />
-          </button>
+        {/* Horizontal Topic Pill Bar (Original ZONA Innovation replacing vertical #channel list!) */}
+        {activeCircle && (
+          <div className="topic-pill-bar" role="tablist" aria-label={`Topik ${activeCircle.name}`}>
+            {circleTopics.map((topic) => {
+              const selected = topic.id === activeChannelId;
+              return (
+                <button
+                  key={topic.id}
+                  id={`topic-pill-${topic.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={`topic-pill ${selected ? 'active' : ''} ${
+                    topic.type === 'hangout' ? 'hangout' : ''
+                  }`}
+                  onClick={() => selectChannel(topic.id)}
+                >
+                  {topic.type === 'hangout' && <MapPin size={13} strokeWidth={2} />}
+                  <span>{formatTopicLabel(topic.name)}</span>
+                  {topic.unreadCount > 0 && !selected && (
+                    <span className="topic-pill-unread">{topic.unreadCount}</span>
+                  )}
+                </button>
+              );
+            })}
 
-          <button
-            id="btn-split-map-toggle"
-            type="button"
-            className={`header-map-pill desktop-only ${splitMapOpen ? 'active' : ''}`}
-            onClick={onToggleSplitMap}
-            title={splitMapOpen ? 'Tutup panel peta' : 'Buka peta samping'}
-            aria-label="Panel peta"
-          >
-            <MapIcon size={16} strokeWidth={1.75} />
-            <span>Peta</span>
-          </button>
-
-          <button
-            type="button"
-            className={`icon-btn ${infoOpen ? 'active' : ''}`}
-            onClick={() => setInfoOpen((v) => !v)}
-            title="Info obrolan"
-            aria-label="Info obrolan"
-          >
-            <Info size={18} strokeWidth={1.75} />
-          </button>
-        </div>
-      </header>
+            {addingTopic ? (
+              <form className="topic-inline-form" onSubmit={handleCreateTopic}>
+                <input
+                  className="topic-inline-input"
+                  placeholder="Nama topik..."
+                  value={newTopicName}
+                  onChange={(e) => setNewTopicName(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setAddingTopic(false);
+                      setNewTopicName('');
+                    }
+                  }}
+                />
+                <button type="submit" className="topic-inline-submit">
+                  Tambah
+                </button>
+                <button
+                  type="button"
+                  className="topic-inline-cancel"
+                  onClick={() => {
+                    setAddingTopic(false);
+                    setNewTopicName('');
+                  }}
+                  aria-label="Batal"
+                >
+                  <X size={13} strokeWidth={2} />
+                </button>
+              </form>
+            ) : (
+              <button
+                id="btn-add-topic"
+                type="button"
+                className="topic-pill add"
+                onClick={() => setAddingTopic(true)}
+              >
+                <Plus size={13} strokeWidth={2.2} />
+                <span>Topik</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {searchOpen && (
         <div className="chat-search-bar">
@@ -1181,7 +1360,9 @@ export function ChatPanel({
                   id="chat-composer-input"
                   rows={1}
                   className="composer-textarea"
-                  placeholder={`Tulis pesan ke ${activeChannel.name}`}
+                  placeholder={`Tulis pesan ke ${
+                    activeCircle ? formatTopicLabel(activeChannel.name) : activeChannel.name
+                  }`}
                   value={draft}
                   onChange={(e) => {
                     setDraft(e.target.value);

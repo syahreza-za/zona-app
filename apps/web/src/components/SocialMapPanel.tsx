@@ -11,6 +11,7 @@ import {
   EyeOff,
   Gamepad2,
   MapPin,
+  Maximize2,
   Plus,
   Search,
   Shield,
@@ -35,10 +36,13 @@ import { buildDirectionsUrl, getBrowserGps, searchRealPlaces } from '../services
 
 interface SocialMapPanelProps {
   theme: 'dark' | 'light';
+  variant?: 'full' | 'hero';
+  circleFilterOverride?: string;
   onRequestPinAt: (coords: Coordinates, placeGuess: string) => void;
   highlightedPinId?: string | null;
+  onExpandHeroMap?: () => void;
   onCloseDrawer?: () => void;
-  onSelectHangoutChannel?: () => void;
+  onSelectHangoutChannel?: (channelId?: string) => void;
   onNotify: (msg: string) => void;
 }
 
@@ -55,10 +59,10 @@ export const HANGOUT_CATEGORY_META: Record<
   HangoutCategory,
   { color: string; label: string; icon: typeof Coffee }
 > = {
-  coffee: { color: '#D97706', label: 'Kopi', icon: Coffee },
-  food: { color: '#EA580C', label: 'Makan', icon: Utensils },
-  gaming: { color: '#3B82F6', label: 'Santai', icon: Gamepad2 },
-  sport: { color: '#10B981', label: 'Olahraga', icon: Activity },
+  coffee: { color: '#C2410C', label: 'Kopi', icon: Coffee },
+  food: { color: '#E05A3F', label: 'Makan', icon: Utensils },
+  gaming: { color: '#0F766E', label: 'Santai', icon: Gamepad2 },
+  sport: { color: '#0D9488', label: 'Olahraga', icon: Activity },
 };
 
 function projectToPercent(point: Coordinates): { x: number; y: number } {
@@ -158,8 +162,11 @@ function applyCartographyStyleEnhancements(map: maplibregl.Map, theme: 'dark' | 
 
 export function SocialMapPanel({
   theme,
+  variant = 'full',
+  circleFilterOverride,
   onRequestPinAt,
   highlightedPinId,
+  onExpandHeroMap,
   onCloseDrawer,
   onSelectHangoutChannel,
   onNotify,
@@ -185,6 +192,9 @@ export function SocialMapPanel({
   const [locating, setLocating] = useState(false);
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('peek');
 
+  const effectiveCircleFilter = circleFilterOverride ?? circleFilter;
+  const isHero = variant === 'hero';
+
   const mapHostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -194,7 +204,10 @@ export function SocialMapPanel({
   const myPrivacy: PrivacyMode = myLocation?.privacyMode ?? 'exact';
 
   const visibleFriends = useMemo(() => {
-    const circle = circleFilter === 'all' ? null : circles.find((c) => c.id === circleFilter);
+    const circle =
+      effectiveCircleFilter === 'all'
+        ? null
+        : circles.find((c) => c.id === effectiveCircleFilter);
     return Object.values(locations)
       .filter((loc) => !blockedUserIds.includes(loc.userId))
       .filter((loc) => (!circle ? true : circle.memberIds.includes(loc.userId)))
@@ -213,7 +226,7 @@ export function SocialMapPanel({
         };
       })
       .filter((entry) => entry.profile && entry.visiblePoint !== null);
-  }, [locations, blockedUserIds, circles, circleFilter, profiles]);
+  }, [locations, blockedUserIds, circles, effectiveCircleFilter, profiles]);
 
   const clusters = useMemo(
     () => clusterMapMarkers(visibleFriends, 220),
@@ -423,7 +436,7 @@ export function SocialMapPanel({
       el.onclick = (e) => {
         e.stopPropagation();
         selectChannel(pin.channelId);
-        onSelectHangoutChannel?.();
+        onSelectHangoutChannel?.(pin.channelId);
       };
       const marker = new maplibregl.Marker({ element: el, anchor: 'top' })
         .setLngLat([pin.point.lng, pin.point.lat])
@@ -443,10 +456,12 @@ export function SocialMapPanel({
       const width = mapHostRef.current?.clientWidth ?? 420;
       const isNarrow = width < 560;
       map.fitBounds(bounds, {
-        padding: isNarrow
-          ? { top: 200, bottom: 225, left: 72, right: 122 }
-          : { top: 135, bottom: 195, left: 96, right: 126 },
-        maxZoom: isNarrow ? 13.4 : 13.8,
+        padding: isHero
+          ? { top: 108, bottom: 92, left: 64, right: 64 }
+          : isNarrow
+            ? { top: 155, bottom: 235, left: 64, right: 74 }
+            : { top: 125, bottom: 185, left: 96, right: 116 },
+        maxZoom: isHero ? 12.9 : isNarrow ? 13.2 : 13.8,
         pitch: 24,
         bearing: 0,
         duration: 0,
@@ -471,6 +486,7 @@ export function SocialMapPanel({
     gatheringPinIds,
     highlightedPinId,
     useVectorMap,
+    isHero,
     selectChannel,
     setSelectedMapUser,
     onSelectHangoutChannel,
@@ -537,7 +553,7 @@ export function SocialMapPanel({
     : null;
 
   return (
-    <section className="map-panel" aria-label="Peta Sosial">
+    <section className={`map-panel ${isHero ? 'hero-mode' : ''}`} aria-label="Peta Sosial">
       {useVectorMap ? (
         <div ref={mapHostRef} className="map-canvas-full" />
       ) : (
@@ -645,7 +661,7 @@ export function SocialMapPanel({
                 onClick={(e) => {
                   e.stopPropagation();
                   selectChannel(pin.channelId);
-                  onSelectHangoutChannel?.();
+                  onSelectHangoutChannel?.(pin.channelId);
                 }}
               >
                 <CatIcon size={13} strokeWidth={2} />
@@ -656,178 +672,64 @@ export function SocialMapPanel({
         </div>
       )}
 
-      {/* Floating Top Glass Controls */}
-      <div className="map-float-top">
-        <div className="map-search-cluster">
-          <div className="map-glass-pill" style={{ width: '100%' }}>
-            <Search size={15} strokeWidth={1.75} color="var(--text-muted)" />
-            <input
-              className="map-search-input"
-              placeholder="Cari tempat untuk kumpul"
-              value={placeQuery}
-              onChange={(e) => setPlaceQuery(e.target.value)}
-            />
-            {placeQuery && (
-              <button
-                type="button"
-                onClick={() => setPlaceQuery('')}
-                aria-label="Hapus pencarian"
-              >
-                <X size={14} strokeWidth={1.75} color="var(--text-muted)" />
-              </button>
-            )}
-          </div>
-
-          {placeResults.length > 0 && (
-            <div className="map-search-dropdown">
-              {placeResults.map((place) => (
-                <button
-                  key={place.id}
-                  type="button"
-                  className="map-search-result"
-                  onClick={() => {
-                    setPlaceQuery('');
-                    setPlaceResults([]);
-                    mapRef.current?.flyTo({
-                      center: [place.point.lng, place.point.lat],
-                      zoom: 15,
-                      pitch: 24,
-                      bearing: 0,
-                    });
-                    onRequestPinAt(place.point, place.name);
-                  }}
-                >
-                  <strong style={{ fontSize: 13 }}>{place.name}</strong>
-                  <span className="meta-text">{place.subtitle}</span>
-                </button>
-              ))}
+      {isHero ? (
+        <>
+          {/* Hero Mode Top Bar: Status badge + Privacy Switcher + Expand Map CTA */}
+          <div className="hero-map-top">
+            <div className="hero-map-live-pill">
+              <span className="live-indicator-dot" aria-hidden="true" />
+              <span>{visibleFriends.length} teman aktif di peta</span>
             </div>
-          )}
 
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <select
-              aria-label="Filter Circle"
-              className="map-glass-pill"
-              style={{ height: 30, padding: '0 10px', fontSize: 12, cursor: 'pointer' }}
-              value={circleFilter}
-              onChange={(e) => setCircleFilter(e.target.value)}
-            >
-              <option value="all">Semua Circle</option>
-              {circles.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+            <div className="hero-map-top-right">
+              <div className="map-privacy-pill compact" role="group" aria-label="Privasi Lokasi">
+                {(
+                  [
+                    { mode: 'exact', label: 'Tepat', icon: Eye },
+                    { mode: 'fuzzy', label: 'Area', icon: Shield },
+                    { mode: 'ghost', label: 'Ghost', icon: EyeOff },
+                  ] as { mode: PrivacyMode; label: string; icon: typeof Eye }[]
+                ).map(({ mode, label, icon: Icon }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`map-privacy-opt ${myPrivacy === mode ? `active ${mode}` : ''}`}
+                    onClick={() => {
+                      setMyPrivacyMode(mode);
+                      void zonaCloudSync.syncLocation({ privacyMode: mode });
+                      onNotify(`Privasi lokasi: ${label}`);
+                    }}
+                    title={`Mode ${label}`}
+                  >
+                    <Icon size={12} strokeWidth={1.9} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div className="map-privacy-pill" role="group" aria-label="Privasi Lokasi">
-            {(
-              [
-                { mode: 'exact', label: 'Tepat', icon: Eye },
-                { mode: 'fuzzy', label: 'Area', icon: Shield },
-                { mode: 'ghost', label: 'Ghost', icon: EyeOff },
-              ] as { mode: PrivacyMode; label: string; icon: typeof Eye }[]
-            ).map(({ mode, label, icon: Icon }) => (
-              <button
-                key={mode}
-                id={`privacy-btn-${mode}`}
-                type="button"
-                className={`map-privacy-opt ${myPrivacy === mode ? `active ${mode}` : ''}`}
-                onClick={() => {
-                  setMyPrivacyMode(mode);
-                  void zonaCloudSync.syncLocation({ privacyMode: mode });
-                  onNotify(`Privasi lokasi: ${label}`);
-                }}
-                title={`Mode ${label}`}
-              >
-                <Icon size={13} strokeWidth={1.75} />
-                <span>{label}</span>
-              </button>
-            ))}
+              {onExpandHeroMap && (
+                <button
+                  id="btn-hero-expand-map"
+                  type="button"
+                  className="hero-expand-btn"
+                  onClick={onExpandHeroMap}
+                >
+                  <Maximize2 size={13} strokeWidth={2} />
+                  <span>Perbesar Peta</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {onCloseDrawer && (
-            <button
-              type="button"
-              className="map-fab-pill"
-              style={{ width: 36, height: 36 }}
-              onClick={onCloseDrawer}
-              title="Tutup peta samping"
-              aria-label="Tutup peta"
-            >
-              <X size={16} strokeWidth={1.75} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Floating Bottom-Right Action Pills (Cleanly spaced above bottom sheet) */}
-      <div className="map-float-right">
-        <button
-          type="button"
-          className="map-fab-pill"
-          onClick={handleRecenterGps}
-          disabled={locating}
-          title="Pusatkan ke lokasi saya"
-          aria-label="Lokasi saya"
-        >
-          <Crosshair size={18} strokeWidth={1.75} />
-        </button>
-        <button
-          id="btn-map-create-pin"
-          type="button"
-          className="map-fab-pill primary"
-          onClick={() =>
-            onRequestPinAt(
-              myLocation?.point ?? { lat: -6.2442, lng: 106.8006 },
-              'M Bloc Space'
-            )
-          }
-          title="Buat Pin Ajak Kumpul"
-          aria-label="Buat Pin Ajak Kumpul"
-        >
-          <Plus size={20} strokeWidth={2} />
-        </button>
-      </div>
-
-      {/* Draggable Bottom Sheet */}
-      <div className={`map-bottom-sheet ${sheetSnap}`}>
-        <div
-          className="sheet-grabber-hit"
-          onPointerDown={handleSheetPointerDown}
-          onPointerUp={handleSheetPointerUp}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') cycleSheetSnap();
-          }}
-          aria-label="Ubah tinggi panel peta"
-        >
-          <span className="sheet-grabber-bar" />
-        </div>
-
-        <div className="sheet-content">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong style={{ fontSize: 13.5 }}>
-              {selectedEntry
-                ? selectedEntry.profile.displayName
-                : `${visibleFriends.length} teman aktif di peta`}
-            </strong>
-            <span className="meta-text">{hangoutPins.length} pin kumpul</span>
-          </div>
-
-          <div className="sheet-friend-strip">
+          {/* Hero Mode Bottom Floating Active Friends Strip */}
+          <div className="hero-map-bottom-strip">
             {visibleFriends.map(({ userId, loc, profile }) => (
               <button
                 key={userId}
                 type="button"
-                className={`sheet-friend-pill ${selectedMapUserId === userId ? 'selected' : ''}`}
+                className="hero-friend-chip"
                 onClick={() => {
                   setSelectedMapUser(userId);
-                  setSheetSnap('half');
                   mapRef.current?.flyTo({
                     center: [loc.point.lng, loc.point.lat],
                     zoom: 14.8,
@@ -843,99 +745,303 @@ export function SocialMapPanel({
                   seed={userId}
                   avatarUrl={profile.avatarUrl}
                   size="xs"
+                  online={profile.isOnline}
+                  showPresence
                 />
-                <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.2 }}>
-                    {profile.displayName}
-                  </div>
-                  <div className="meta-text" style={{ fontSize: 11 }}>
-                    {loc.areaLabel}
-                  </div>
+                <div className="hero-friend-copy">
+                  <strong>{profile.displayName}</strong>
+                  <span>{loc.areaLabel}</span>
                 </div>
               </button>
             ))}
           </div>
-
-          {sheetSnap !== 'peek' && selectedEntry && selectedEntry.visiblePoint && myLocation && (
-            <div className="sheet-detail-row">
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  {selectedEntry.profile.displayName} · {selectedEntry.loc.activityEmoji}{' '}
-                  {selectedEntry.loc.activityText}
-                </div>
-                <div className="meta-text" style={{ marginTop: 2 }}>
-                  {selectedEntry.loc.areaLabel} ·{' '}
-                  {selectedEntry.loc.privacyMode === 'fuzzy'
-                    ? 'Area perkiraan (~400m)'
-                    : `${formatDistanceLabel(
-                        distanceMeters(myLocation.point, selectedEntry.visiblePoint)
-                      )} · ~${estimateEtaMinutes(
-                        myLocation.point,
-                        selectedEntry.visiblePoint
-                      )} mnt`}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span
-                  className="meta-text"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}
-                >
-                  <Battery size={13} strokeWidth={1.75} />
-                  {selectedEntry.loc.batteryPct}%
-                </span>
-                <a
-                  href={buildDirectionsUrl(
-                    selectedEntry.visiblePoint,
-                    selectedEntry.profile.displayName
-                  )}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-link-btn"
-                >
-                  <ExternalLink size={12} strokeWidth={1.75} />
-                  <span>Rute</span>
-                </a>
-              </div>
-            </div>
-          )}
-
-          {sheetSnap !== 'peek' &&
-            hangoutPins.map((pin) => {
-              const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
-              return (
-                <div key={pin.id} className="sheet-detail-row">
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                      }}
-                    >
-                      <MapPin size={14} strokeWidth={1.75} color={cat.color} />
-                      <span>{pin.placeName}</span>
-                    </div>
-                    <div className="meta-text" style={{ marginTop: 2 }}>
-                      {pin.title} · {pin.startsAtLabel} · {pin.rsvps.length} respon
-                    </div>
-                  </div>
+        </>
+      ) : (
+        <>
+          {/* Full Map Floating Top Glass Controls */}
+          <div className="map-float-top">
+            <div className="map-search-cluster">
+              <div className="map-glass-pill" style={{ width: '100%' }}>
+                <Search size={15} strokeWidth={1.75} color="var(--text-muted)" />
+                <input
+                  className="map-search-input"
+                  placeholder="Cari tempat untuk kumpul"
+                  value={placeQuery}
+                  onChange={(e) => setPlaceQuery(e.target.value)}
+                />
+                {placeQuery && (
                   <button
                     type="button"
-                    className="inline-link-btn"
+                    onClick={() => setPlaceQuery('')}
+                    aria-label="Hapus pencarian"
+                  >
+                    <X size={14} strokeWidth={1.75} color="var(--text-muted)" />
+                  </button>
+                )}
+              </div>
+
+              {placeResults.length > 0 && (
+                <div className="map-search-dropdown">
+                  {placeResults.map((place) => (
+                    <button
+                      key={place.id}
+                      type="button"
+                      className="map-search-result"
+                      onClick={() => {
+                        setPlaceQuery('');
+                        setPlaceResults([]);
+                        mapRef.current?.flyTo({
+                          center: [place.point.lng, place.point.lat],
+                          zoom: 15,
+                          pitch: 24,
+                          bearing: 0,
+                        });
+                        onRequestPinAt(place.point, place.name);
+                      }}
+                    >
+                      <strong style={{ fontSize: 13 }}>{place.name}</strong>
+                      <span className="meta-text">{place.subtitle}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!circleFilterOverride && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <select
+                    aria-label="Filter Circle"
+                    className="map-glass-pill"
+                    style={{ height: 30, padding: '0 10px', fontSize: 12, cursor: 'pointer' }}
+                    value={circleFilter}
+                    onChange={(e) => setCircleFilter(e.target.value)}
+                  >
+                    <option value="all">Semua Circle</option>
+                    {circles.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="map-privacy-pill" role="group" aria-label="Privasi Lokasi">
+                {(
+                  [
+                    { mode: 'exact', label: 'Tepat', icon: Eye },
+                    { mode: 'fuzzy', label: 'Area', icon: Shield },
+                    { mode: 'ghost', label: 'Ghost', icon: EyeOff },
+                  ] as { mode: PrivacyMode; label: string; icon: typeof Eye }[]
+                ).map(({ mode, label, icon: Icon }) => (
+                  <button
+                    key={mode}
+                    id={`privacy-btn-${mode}`}
+                    type="button"
+                    className={`map-privacy-opt ${myPrivacy === mode ? `active ${mode}` : ''}`}
                     onClick={() => {
-                      selectChannel(pin.channelId);
-                      onSelectHangoutChannel?.();
+                      setMyPrivacyMode(mode);
+                      void zonaCloudSync.syncLocation({ privacyMode: mode });
+                      onNotify(`Privasi lokasi: ${label}`);
+                    }}
+                    title={`Mode ${label}`}
+                  >
+                    <Icon size={13} strokeWidth={1.75} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {onCloseDrawer && (
+                <button
+                  type="button"
+                  className="map-fab-pill"
+                  style={{ width: 36, height: 36 }}
+                  onClick={onCloseDrawer}
+                  title="Tutup peta"
+                  aria-label="Tutup peta"
+                >
+                  <X size={16} strokeWidth={1.75} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Floating Bottom-Right Action Pills */}
+          <div className="map-float-right">
+            <button
+              type="button"
+              className="map-fab-pill"
+              onClick={handleRecenterGps}
+              disabled={locating}
+              title="Pusatkan ke lokasi saya"
+              aria-label="Lokasi saya"
+            >
+              <Crosshair size={18} strokeWidth={1.75} />
+            </button>
+            <button
+              id="btn-map-create-pin"
+              type="button"
+              className="map-fab-pill primary"
+              onClick={() =>
+                onRequestPinAt(
+                  myLocation?.point ?? { lat: -6.2442, lng: 106.8006 },
+                  'M Bloc Space'
+                )
+              }
+              title="Buat Pin Ajak Kumpul"
+              aria-label="Buat Pin Ajak Kumpul"
+            >
+              <Plus size={20} strokeWidth={2} />
+            </button>
+          </div>
+
+          {/* Floating Bottom Friend & Pin Dock / Sheet */}
+          <div className={`map-bottom-sheet ${sheetSnap}`}>
+            <div
+              className="sheet-grabber-hit"
+              onPointerDown={handleSheetPointerDown}
+              onPointerUp={handleSheetPointerUp}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') cycleSheetSnap();
+              }}
+              aria-label="Ubah tinggi panel peta"
+            >
+              <span className="sheet-grabber-bar" />
+            </div>
+
+            <div className="sheet-content">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: 13.5 }}>
+                  {selectedEntry
+                    ? selectedEntry.profile.displayName
+                    : `${visibleFriends.length} teman aktif di peta`}
+                </strong>
+                <span className="meta-text">{hangoutPins.length} pin kumpul</span>
+              </div>
+
+              <div className="sheet-friend-strip">
+                {visibleFriends.map(({ userId, loc, profile }) => (
+                  <button
+                    key={userId}
+                    type="button"
+                    className={`sheet-friend-pill ${selectedMapUserId === userId ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedMapUser(userId);
+                      setSheetSnap('half');
+                      mapRef.current?.flyTo({
+                        center: [loc.point.lng, loc.point.lat],
+                        zoom: 14.8,
+                        pitch: 24,
+                        bearing: 0,
+                      });
                     }}
                   >
-                    Buka Kanal
+                    <Avatar
+                      initials={profile.initials}
+                      color={profile.avatarColor}
+                      variant={profile.avatarVariant}
+                      seed={userId}
+                      avatarUrl={profile.avatarUrl}
+                      size="xs"
+                    />
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.2 }}>
+                        {profile.displayName}
+                      </div>
+                      <div className="meta-text" style={{ fontSize: 11 }}>
+                        {loc.areaLabel}
+                      </div>
+                    </div>
                   </button>
+                ))}
+              </div>
+
+              {sheetSnap !== 'peek' && selectedEntry && selectedEntry.visiblePoint && myLocation && (
+                <div className="sheet-detail-row">
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                      {selectedEntry.profile.displayName} · {selectedEntry.loc.activityEmoji}{' '}
+                      {selectedEntry.loc.activityText}
+                    </div>
+                    <div className="meta-text" style={{ marginTop: 2 }}>
+                      {selectedEntry.loc.areaLabel} ·{' '}
+                      {selectedEntry.loc.privacyMode === 'fuzzy'
+                        ? 'Area perkiraan (~400m)'
+                        : `${formatDistanceLabel(
+                            distanceMeters(myLocation.point, selectedEntry.visiblePoint)
+                          )} · ~${estimateEtaMinutes(
+                            myLocation.point,
+                            selectedEntry.visiblePoint
+                          )} mnt`}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      className="meta-text"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                    >
+                      <Battery size={13} strokeWidth={1.75} />
+                      {selectedEntry.loc.batteryPct}%
+                    </span>
+                    <a
+                      href={buildDirectionsUrl(
+                        selectedEntry.visiblePoint,
+                        selectedEntry.profile.displayName
+                      )}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-link-btn"
+                    >
+                      <ExternalLink size={12} strokeWidth={1.75} />
+                      <span>Rute</span>
+                    </a>
+                  </div>
                 </div>
-              );
-            })}
-        </div>
-      </div>
+              )}
+
+              {sheetSnap !== 'peek' &&
+                hangoutPins.map((pin) => {
+                  const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
+                  return (
+                    <div key={pin.id} className="sheet-detail-row">
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                          }}
+                        >
+                          <MapPin size={14} strokeWidth={1.75} color={cat.color} />
+                          <span>{pin.placeName}</span>
+                        </div>
+                        <div className="meta-text" style={{ marginTop: 2 }}>
+                          {pin.title} · {pin.startsAtLabel} · {pin.rsvps.length} respon
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-link-btn"
+                        onClick={() => {
+                          selectChannel(pin.channelId);
+                          onSelectHangoutChannel?.(pin.channelId);
+                        }}
+                      >
+                        Buka Obrolan
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }

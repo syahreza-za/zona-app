@@ -11,7 +11,7 @@ interface AuthOnboardingProps {
   onNotify: (msg: string) => void;
 }
 
-const AVATAR_COLORS = ['#10B981', '#EA580C', '#0EA5E9', '#D97706', '#E11D48', '#0D9488'];
+const AVATAR_COLORS = ['#E05A3F', '#C2410C', '#0D9488', '#B45309', '#9F1239', '#0F766E'];
 
 function GoogleBrandMark() {
   return (
@@ -235,22 +235,22 @@ export function AuthOnboarding({
 
           <div className="showcase-voice-pill">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Headphones size={15} strokeWidth={1.9} color="#10B981" />
+              <Headphones size={15} strokeWidth={1.9} color="#0D9488" />
               <span style={{ fontSize: 13, fontWeight: 600 }}>Meja Nongkrong</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div className="avatar-stack">
                 <span className="avatar-stack-item">
-                  <Avatar initials="DM" color="#0EA5E9" variant={2} size="xs" />
+                  <Avatar initials="DM" color="#0D9488" variant={2} size="xs" />
                 </span>
                 <span className="avatar-stack-item">
-                  <Avatar initials="FJ" color="#D97706" variant={3} size="xs" />
+                  <Avatar initials="FJ" color="#B45309" variant={3} size="xs" />
                 </span>
                 <span className="avatar-stack-item">
-                  <Avatar initials="RZ" color="#10B981" variant={0} size="xs" />
+                  <Avatar initials="RZ" color="#E05A3F" variant={0} size="xs" />
                 </span>
               </div>
-              <span className="voice-eq sm">
+              <span className="voice-eq sm live">
                 <span />
                 <span />
                 <span />

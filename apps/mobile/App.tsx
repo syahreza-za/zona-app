@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -31,7 +32,8 @@ import {
   type PrivacyMode,
 } from '@zona/shared';
 
-type MobileTab = 'chat' | 'circles' | 'map' | 'profile';
+type MobileWorld = 'pulse' | 'ruang' | 'peta';
+type InboxFilter = 'all' | 'dm' | 'circle' | 'hangout';
 type SheetSnap = 'peek' | 'half' | 'expanded';
 
 const STORAGE_KEY = '@zona/workspace_v1';
@@ -43,67 +45,77 @@ const mobileCloudBackend = createZonaCloudBackend({
 
 const PALETTES = {
   light: {
-    rail: '#EFEEE9',
-    sidebar: '#F8F7F4',
+    canvas: '#F7F5F0',
+    panel: '#FFFFFF',
+    input: '#EFECE5',
     canvasByTheme: {
-      clean: '#EEF3F0',
-      'warm-sand': '#F4F1EA',
-      'ocean-mist': '#ECF4F8',
-      'midnight-forest': '#E7F1EC',
+      clean: '#F7F5F0',
+      'warm-sand': '#F3ECE2',
+      'ocean-mist': '#EEF3F4',
+      'midnight-forest': '#EFF2EE',
     } as Record<ChatWallpaperTheme, string>,
-    elevated: '#FFFFFF',
-    input: '#ECEAE3',
     bubbleIn: '#FFFFFF',
-    bubbleOut: '#10B981',
-    bubbleOutText: '#FFFFFF',
-    hairline: 'rgba(15, 23, 42, 0.08)',
-    textPrimary: '#111827',
-    textSecondary: '#4B5563',
-    textMuted: '#7C8594',
-    danger: '#EF4444',
-    mapBg: '#F3EFE6',
-    mapPark: '#CBE8C8',
-    mapWater: '#A8D5F2',
-    glass: 'rgba(255, 255, 255, 0.92)',
+    bubbleOut: '#1C1917',
+    bubbleOutText: '#FAFAF9',
+    hairline: 'rgba(28, 25, 23, 0.08)',
+    textPrimary: '#1C1917',
+    textSecondary: '#57534E',
+    textMuted: '#A8A29E',
+    accent: '#E05A3F',
+    accentSoft: 'rgba(224, 90, 63, 0.12)',
+    live: '#0D9488',
+    liveSoft: 'rgba(13, 148, 136, 0.13)',
+    danger: '#DC2626',
+    mapBg: '#F1EDE3',
+    mapPark: '#D2E6CE',
+    mapWater: '#B4D6EA',
+    glass: 'rgba(255, 255, 255, 0.94)',
+    capsuleActiveBg: '#1C1917',
+    capsuleActiveText: '#FAFAF9',
   },
   dark: {
-    rail: '#0F1117',
-    sidebar: '#161922',
+    canvas: '#111012',
+    panel: '#19181C',
+    input: '#242228',
     canvasByTheme: {
-      clean: '#1B1F2A',
-      'warm-sand': '#201D1A',
-      'ocean-mist': '#16202C',
-      'midnight-forest': '#131F1C',
+      clean: '#141316',
+      'warm-sand': '#1B1715',
+      'ocean-mist': '#13191D',
+      'midnight-forest': '#141917',
     } as Record<ChatWallpaperTheme, string>,
-    elevated: '#232836',
-    input: '#232836',
-    bubbleIn: '#232836',
-    bubbleOut: '#134E4A',
-    bubbleOutText: '#F3F6F8',
-    hairline: 'rgba(255, 255, 255, 0.08)',
-    textPrimary: '#F3F5F8',
-    textSecondary: '#B7BEC9',
-    textMuted: '#7C8492',
+    bubbleIn: '#222027',
+    bubbleOut: '#E05A3F',
+    bubbleOutText: '#FAF5F0',
+    hairline: 'rgba(245, 243, 239, 0.08)',
+    textPrimary: '#F5F3EF',
+    textSecondary: '#A8A29E',
+    textMuted: '#716D69',
+    accent: '#E05A3F',
+    accentSoft: 'rgba(224, 90, 63, 0.2)',
+    live: '#14B8A6',
+    liveSoft: 'rgba(20, 184, 166, 0.18)',
     danger: '#F87171',
-    mapBg: '#121826',
-    mapPark: '#172B24',
-    mapWater: '#0D1626',
-    glass: 'rgba(22, 25, 34, 0.92)',
+    mapBg: '#141720',
+    mapPark: '#172924',
+    mapWater: '#0F1826',
+    glass: 'rgba(25, 24, 28, 0.94)',
+    capsuleActiveBg: '#F5F3EF',
+    capsuleActiveText: '#1C1917',
   },
 };
 
 const CATEGORY_COLORS: Record<HangoutCategory, string> = {
-  coffee: '#D97706',
-  food: '#EA580C',
-  gaming: '#3B82F6',
-  sport: '#10B981',
+  coffee: '#C2410C',
+  food: '#E05A3F',
+  gaming: '#0F766E',
+  sport: '#0D9488',
 };
 
 const CHAT_THEMES: Array<{ id: ChatWallpaperTheme; label: string }> = [
-  { id: 'clean', label: 'Default Clean' },
-  { id: 'warm-sand', label: 'Warm Sand' },
-  { id: 'ocean-mist', label: 'Ocean Mist' },
-  { id: 'midnight-forest', label: 'Midnight Forest' },
+  { id: 'clean', label: 'Warm Alabaster' },
+  { id: 'warm-sand', label: 'Linen Paper' },
+  { id: 'ocean-mist', label: 'Coastal Fog' },
+  { id: 'midnight-forest', label: 'Sage Stone' },
 ];
 
 function formatTime(iso: string): string {
@@ -111,12 +123,19 @@ function formatTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatTopicLabel(name: string): string {
+  if (name.toLowerCase() === 'umum') return 'Obrolan';
+  return name.replace(/-/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [tab, setTab] = useState<MobileTab>('chat');
+  const [world, setWorld] = useState<MobileWorld>('pulse');
   const [inThread, setInThread] = useState(false);
-  const [dmSearch, setDmSearch] = useState('');
-  const [dmFilter, setDmFilter] = useState<'all' | 'unread'>('all');
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [circlePickerOpen, setCirclePickerOpen] = useState(false);
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all');
   const [draft, setDraft] = useState('');
   const [sheetSnap, setSheetSnap] = useState<SheetSnap>('half');
   const [locatingGps, setLocatingGps] = useState(false);
@@ -156,7 +175,7 @@ export default function App() {
     hydrateSnapshot,
   } = useZonaStore();
 
-  // 1. Offline Persistence (AsyncStorage) — hydrate on launch & persist changes
+  // 1. Offline Persistence (AsyncStorage)
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem(STORAGE_KEY)
@@ -232,31 +251,149 @@ export default function App() {
   const c = PALETTES[theme];
   const me = profiles[currentUserId];
   const activeChannel = channels.find((ch) => ch.id === activeChannelId);
-  const activeCircle = circles.find((ci) => ci.id === (activeCircleId ?? circles[0]?.id));
-  const activeAccent = activeCircle?.accentColor ?? '#10B981';
+  const activeCircle = circles.find((ci) => ci.id === activeCircleId) ?? null;
+  const threadCircle = activeChannel?.circleId
+    ? circles.find((ci) => ci.id === activeChannel.circleId) ?? null
+    : null;
+  const threadTopics = useMemo(
+    () =>
+      threadCircle
+        ? channels.filter((ch) => ch.circleId === threadCircle.id && !ch.isArchived)
+        : [],
+    [channels, threadCircle]
+  );
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
   const myLocation = locations[currentUserId];
   const myPrivacy: PrivacyMode = myLocation?.privacyMode ?? 'exact';
   const canvasBg = c.canvasByTheme[chatTheme];
 
   const activeSnapStories = useMemo(() => {
-    const seen = new Set<string>();
     return messages
       .filter((m) => m.type === 'quick_snap' && !m.isDeleted && !blockedUserIds.includes(m.senderId))
-      .filter((m) => {
-        if (seen.has(m.senderId)) return false;
-        seen.add(m.senderId);
-        return true;
-      });
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [messages, blockedUserIds]);
 
-  const dmChannels = useMemo(() => {
-    const q = dmSearch.trim().toLowerCase();
-    return channels
-      .filter((ch) => ch.circleId === null && !ch.isArchived)
-      .filter((ch) => (dmFilter === 'unread' ? ch.unreadCount > 0 : true))
-      .filter((ch) => (!q ? true : ch.name.toLowerCase().includes(q)));
-  }, [channels, dmSearch, dmFilter]);
+  const visibleVoiceLounges = useMemo(
+    () =>
+      voiceLounges.filter((vl) => (!activeCircleId ? true : vl.circleId === activeCircleId)),
+    [voiceLounges, activeCircleId]
+  );
+
+  const visibleHangouts = useMemo(
+    () =>
+      hangoutPins.filter((p) => (!activeCircleId ? true : p.circleId === activeCircleId)),
+    [hangoutPins, activeCircleId]
+  );
+
+  const lastMessageByChannel = useMemo(() => {
+    const map: Record<string, { text: string; createdAt: string }> = {};
+    for (const m of messages) {
+      if (blockedUserIds.includes(m.senderId)) continue;
+      const existing = map[m.channelId];
+      if (!existing || m.createdAt > existing.createdAt) {
+        map[m.channelId] = {
+          text: m.isDeleted ? 'Pesan dihapus' : m.content,
+          createdAt: m.createdAt,
+        };
+      }
+    }
+    return map;
+  }, [messages, blockedUserIds]);
+
+  // Unified Inbox entries for Ruang (DMs + Circles as flat items, NO #channel sidebar!)
+  const unifiedInbox = useMemo(() => {
+    const q = inboxSearch.trim().toLowerCase();
+    const list: Array<{
+      kind: 'dm' | 'circle' | 'hangout';
+      id: string;
+      channelId: string;
+      circleId?: string;
+      title: string;
+      preview: string;
+      time: string;
+      unread: number;
+      badgeBg: string;
+      badgeText: string;
+    }> = [];
+
+    if (inboxFilter === 'all' || inboxFilter === 'dm') {
+      channels
+        .filter((ch) => ch.type === 'dm' && !ch.isArchived)
+        .forEach((ch) => {
+          const partnerId = ch.participantIds?.find((id) => id !== currentUserId);
+          const partner = partnerId ? profiles[partnerId] : null;
+          const last = lastMessageByChannel[ch.id];
+          list.push({
+            kind: 'dm',
+            id: ch.id,
+            channelId: ch.id,
+            title: ch.name,
+            preview: last?.text ?? partner?.statusText ?? 'Mulai obrolan',
+            time: last?.createdAt ?? '',
+            unread: ch.unreadCount,
+            badgeBg: partner?.avatarColor ?? c.accent,
+            badgeText: partner?.initials ?? 'ZN',
+          });
+        });
+    }
+
+    if (inboxFilter === 'all' || inboxFilter === 'circle') {
+      (activeCircleId ? circles.filter((ci) => ci.id === activeCircleId) : circles).forEach(
+        (ci) => {
+          const ciChs = channels.filter((ch) => ch.circleId === ci.id && !ch.isArchived);
+          if (ciChs.length === 0) return;
+          const topCh = [...ciChs].sort((a, b) =>
+            (lastMessageByChannel[b.id]?.createdAt ?? '').localeCompare(
+              lastMessageByChannel[a.id]?.createdAt ?? ''
+            )
+          )[0];
+          const last = lastMessageByChannel[topCh.id];
+          list.push({
+            kind: 'circle',
+            id: `circle-${ci.id}`,
+            channelId: topCh.id,
+            circleId: ci.id,
+            title: ci.name,
+            preview: last?.text ?? ci.description,
+            time: last?.createdAt ?? '',
+            unread: ciChs.reduce((s, ch) => s + ch.unreadCount, 0),
+            badgeBg: ci.accentColor,
+            badgeText: ci.shortCode,
+          });
+        }
+      );
+    }
+
+    if (inboxFilter === 'hangout') {
+      channels
+        .filter(
+          (ch) =>
+            ch.type === 'hangout' &&
+            !ch.isArchived &&
+            (!activeCircleId || ch.circleId === activeCircleId)
+        )
+        .forEach((ch) => {
+          const parent = circles.find((ci) => ci.id === ch.circleId);
+          const last = lastMessageByChannel[ch.id];
+          list.push({
+            kind: 'hangout',
+            id: ch.id,
+            channelId: ch.id,
+            circleId: ch.circleId ?? undefined,
+            title: formatTopicLabel(ch.name),
+            preview: last?.text ?? ch.topic ?? 'Koordinasi kumpul',
+            time: last?.createdAt ?? '',
+            unread: ch.unreadCount,
+            badgeBg: parent?.accentColor ?? c.accent,
+            badgeText: 'PIN',
+          });
+        });
+    }
+
+    return list
+      .filter((item) => (!q ? true : item.title.toLowerCase().includes(q) || item.preview.toLowerCase().includes(q)))
+      .sort((a, b) => b.time.localeCompare(a.time));
+  }, [channels, circles, activeCircleId, currentUserId, profiles, lastMessageByChannel, inboxFilter, inboxSearch, c.accent]);
 
   const channelMessages = useMemo(
     () =>
@@ -272,6 +409,7 @@ export default function App() {
     () =>
       Object.values(locations)
         .filter((loc) => !blockedUserIds.includes(loc.userId))
+        .filter((loc) => (!activeCircle ? true : activeCircle.memberIds.includes(loc.userId)))
         .map((loc) => ({
           userId: loc.userId,
           point: resolveVisibleCoordinates(loc.point, loc.privacyMode, loc.userId) ?? loc.point,
@@ -280,7 +418,7 @@ export default function App() {
           coords: resolveVisibleCoordinates(loc.point, loc.privacyMode, loc.userId),
         }))
         .filter((entry) => entry.profile && entry.coords !== null),
-    [locations, blockedUserIds, profiles]
+    [locations, blockedUserIds, activeCircle, profiles]
   );
 
   const clusters = useMemo(() => clusterMapMarkers(visibleFriends, 220), [visibleFriends]);
@@ -298,7 +436,8 @@ export default function App() {
 
   // 3. Real Photo Picker for Quick Snap (expo-image-picker)
   const handlePickQuickSnap = async () => {
-    if (!activeChannel) return;
+    const targetChannel = activeChannel ?? channels[0];
+    if (!targetChannel) return;
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
@@ -318,9 +457,9 @@ export default function App() {
       const dataUrl = asset.base64
         ? `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`
         : asset.uri;
-      const snapMsg = sendQuickSnap(activeChannel.id, 'Quick Snap dari ponsel', false, dataUrl);
+      const snapMsg = sendQuickSnap(targetChannel.id, 'Quick Snap 24 jam', false, dataUrl);
 
-      if (cloudSynced && isValidUuid(activeChannel.id)) {
+      if (cloudSynced && isValidUuid(targetChannel.id)) {
         try {
           let outbound = snapMsg;
           if (dataUrl.startsWith('data:')) {
@@ -341,7 +480,7 @@ export default function App() {
         }
       }
     } catch {
-      sendQuickSnap(activeChannel.id, 'Snap dari ponsel');
+      sendQuickSnap(targetChannel.id, 'Momen spontan dari ponsel');
     }
   };
 
@@ -398,162 +537,397 @@ export default function App() {
         })
         .catch(() => undefined);
     }
-    setTab('chat');
+    setWorld('ruang');
     setInThread(true);
   };
 
-  const cycleSheet = () => {
-    setSheetSnap((s) => (s === 'peek' ? 'half' : s === 'half' ? 'expanded' : 'peek'));
+  const handleFabCreate = () => {
+    Alert.alert('Buat di ZONA', 'Pilih aksi cepat:', [
+      { text: 'Pin Ajak Kumpul', onPress: handleQuickHangout },
+      { text: 'Bagikan Quick Snap (24j)', onPress: () => void handlePickQuickSnap() },
+      { text: 'Batal', style: 'cancel' },
+    ]);
   };
 
+  const showFloatingDock = !(world === 'ruang' && inThread);
+
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: c.sidebar }]}>
+    <SafeAreaView style={[styles.root, { backgroundColor: c.canvas }]}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
 
-      {/* TAB 1: CHAT (Default — Quick Snap Stories Strip + WhatsApp DM List) */}
-      {tab === 'chat' && !inThread && (
-        <View style={[styles.flex1, { backgroundColor: c.sidebar }]}>
-          <View style={[styles.header, { borderBottomColor: c.hairline, backgroundColor: c.sidebar }]}>
-            <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Pesan</Text>
+      {/* Minimalist Top Header (Circle Selector Pill + Theme & Profile Avatar) */}
+      {showFloatingDock && (
+        <View style={[styles.topBar, { borderBottomColor: c.hairline, backgroundColor: c.canvas }]}>
+          <TouchableOpacity
+            style={[styles.circleSelectorPill, { backgroundColor: c.panel, borderColor: c.hairline }]}
+            onPress={() => setCirclePickerOpen(true)}
+          >
+            <View
+              style={[
+                styles.selectorDot,
+                { backgroundColor: activeCircle?.accentColor ?? c.accent },
+              ]}
+            />
+            <Text style={[styles.selectorLabel, { color: c.textPrimary }]} numberOfLines={1}>
+              {activeCircle ? activeCircle.name : 'Semua Circle'} ▾
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.topRightRow}>
+            <TouchableOpacity
+              style={[styles.topIconBtn, { backgroundColor: c.panel, borderColor: c.hairline }]}
+              onPress={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            >
+              <Text style={{ color: c.textPrimary, fontSize: 12, fontWeight: '600' }}>
+                {theme === 'dark' ? 'Terang' : 'Gelap'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.avatarSm, { backgroundColor: me?.avatarColor ?? c.accent }]}
+              onPress={() => setProfileModalOpen(true)}
+            >
+              <Text style={styles.avatarText}>{me?.initials ?? 'RZ'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* WORLD 1: PULSE (Bento Home) */}
+      {world === 'pulse' && (
+        <ScrollView
+          style={[styles.flex1, { backgroundColor: c.canvas }]}
+          contentContainerStyle={{ padding: 14, gap: 14, paddingBottom: 112 }}
+        >
+          {/* Hero Map Preview Card */}
+          <View style={[styles.heroMapCard, { backgroundColor: c.mapBg, borderColor: c.hairline }]}>
+            <View style={[styles.heroMapBlob, { backgroundColor: c.mapPark, left: 16, top: 24, width: 120, height: 84 }]} />
+            <View style={[styles.heroMapBlob, { backgroundColor: c.mapWater, right: 20, bottom: 26, width: 140, height: 56 }]} />
+
+            <View style={styles.heroMapTopRow}>
+              <View style={[styles.heroLiveChip, { backgroundColor: c.glass }]}>
+                <View style={[styles.liveDot, { backgroundColor: c.live }]} />
+                <Text style={{ color: c.textPrimary, fontSize: 12, fontWeight: '600' }}>
+                  {visibleFriends.length} teman aktif
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.heroExpandBtn, { backgroundColor: c.capsuleActiveBg }]}
+                onPress={() => setWorld('peta')}
+              >
+                <Text style={{ color: c.capsuleActiveText, fontSize: 12, fontWeight: '600' }}>
+                  Perbesar Peta
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroAvatarRow}>
+              {visibleFriends.slice(0, 4).map(({ userId, loc, profile }) => (
+                <TouchableOpacity
+                  key={userId}
+                  style={[styles.heroFriendChip, { backgroundColor: c.glass, borderColor: c.hairline }]}
+                  onPress={() => {
+                    setSelectedMapUser(userId);
+                    setWorld('peta');
+                  }}
+                >
+                  <View style={[styles.avatarXs, { backgroundColor: profile.avatarColor }]}>
+                    <Text style={styles.avatarTextXs}>{profile.initials}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ color: c.textPrimary, fontSize: 12, fontWeight: '600' }}>
+                      {profile.displayName}
+                    </Text>
+                    <Text style={{ color: c.textMuted, fontSize: 10.5 }}>{loc.areaLabel}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          {activeSnapStories.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ maxHeight: 84, borderBottomWidth: 1, borderBottomColor: c.hairline }}
-              contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 10, gap: 12 }}
-            >
+          {/* 3:4 Quick Snap Moments Strip */}
+          <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+            <View style={styles.rowBetween}>
+              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Momen 24 Jam</Text>
+              <TouchableOpacity onPress={() => void handlePickQuickSnap()}>
+                <Text style={{ color: c.accent, fontSize: 12.5, fontWeight: '600' }}>+ Bagikan</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 10 }}>
+              <TouchableOpacity
+                style={[styles.momentCardCreate, { backgroundColor: c.input, borderColor: c.hairline }]}
+                onPress={() => void handlePickQuickSnap()}
+              >
+                <View style={[styles.momentPlusBadge, { backgroundColor: c.accent }]}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>+</Text>
+                </View>
+                <Text style={{ color: c.textPrimary, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
+                  Bagikan Momen
+                </Text>
+              </TouchableOpacity>
+
               {activeSnapStories.map((snap) => {
                 const author = profiles[snap.senderId];
                 if (!author) return null;
                 return (
                   <TouchableOpacity
                     key={snap.id}
-                    style={{ alignItems: 'center', gap: 4 }}
+                    style={[styles.momentCard, { backgroundColor: author.avatarColor }]}
                     onPress={() => {
                       selectChannel(snap.channelId);
+                      setWorld('ruang');
                       setInThread(true);
                     }}
                   >
-                    <View style={[styles.storyRing, { borderColor: activeAccent }]}>
-                      <View style={[styles.avatarSm, { backgroundColor: author.avatarColor }]}>
-                        <Text style={styles.avatarText}>{author.initials}</Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 11, color: c.textSecondary, fontWeight: '500' }}>
-                      {author.displayName}
+                    <Text style={styles.momentAuthor}>{author.displayName}</Text>
+                    <Text style={styles.momentCaption} numberOfLines={2}>
+                      {snap.snapCaption || 'Quick Snap 24j'}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-          )}
+          </View>
 
+          {/* Live Audio Lounge Cards */}
+          <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: 8 }]}>
+              Ruang Suara Hidup
+            </Text>
+            {visibleVoiceLounges.map((vl) => {
+              const joined = activeVoiceLoungeId === vl.id;
+              return (
+                <View
+                  key={vl.id}
+                  style={[
+                    styles.voiceCard,
+                    {
+                      backgroundColor: joined ? c.liveSoft : c.canvas,
+                      borderColor: joined ? c.live : c.hairline,
+                    },
+                  ]}
+                >
+                  <View style={styles.flex1}>
+                    <Text style={[styles.rowTitle, { color: c.textPrimary }]}>{vl.name}</Text>
+                    <Text style={[styles.meta, { color: c.textSecondary }]}>
+                      {vl.participantIds.length} peserta · {vl.topic}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.actionPill,
+                      { backgroundColor: joined ? c.danger : c.capsuleActiveBg },
+                    ]}
+                    onPress={() => (joined ? leaveVoiceLounge() : joinVoiceLounge(vl.id))}
+                  >
+                    <Text
+                      style={{
+                        color: joined ? '#FFFFFF' : c.capsuleActiveText,
+                        fontSize: 12.5,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {joined ? 'Keluar' : 'Gabung Suara'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Agenda Kumpul RSVP Card */}
+          {visibleHangouts.slice(0, 1).map((pin) => {
+            const myRsvp = pin.rsvps.find((r) => r.userId === currentUserId);
+            return (
+              <View
+                key={pin.id}
+                style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}
+              >
+                <View style={styles.rowBetween}>
+                  <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Agenda Kumpul</Text>
+                  <Text style={[styles.meta, { color: c.accent, fontWeight: '600' }]}>
+                    {pin.startsAtLabel}
+                  </Text>
+                </View>
+                <Text style={[styles.rowTitle, { color: c.textPrimary, marginTop: 6 }]}>
+                  {pin.title}
+                </Text>
+                <Text style={[styles.meta, { color: c.textSecondary, marginBottom: 10 }]}>
+                  {pin.placeName} · {pin.rsvps.length} respon
+                </Text>
+                <View style={styles.rsvpRow}>
+                  {(['going', 'otw', 'maybe'] as const).map((status) => {
+                    const selected = myRsvp?.status === status;
+                    return (
+                      <TouchableOpacity
+                        key={status}
+                        style={[
+                          styles.rsvpBtn,
+                          {
+                            backgroundColor: selected ? c.accent : c.input,
+                          },
+                        ]}
+                        onPress={() => {
+                          respondToHangout(pin.id, status);
+                          if (cloudSynced && isValidUuid(pin.id)) {
+                            void mobileCloudBackend
+                              .upsertHangoutRsvp(pin.id, currentUserId, status)
+                              .catch(() => undefined);
+                          }
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: selected ? '#FFFFFF' : c.textPrimary,
+                            fontSize: 12.5,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {status === 'going' ? 'Ikut' : status === 'otw' ? 'OTW' : 'Nanti'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* WORLD 2: RUANG (Unified Inbox List) */}
+      {world === 'ruang' && !inThread && (
+        <View style={[styles.flex1, { backgroundColor: c.canvas }]}>
           <View style={styles.searchWrap}>
             <TextInput
-              style={[styles.searchInput, { backgroundColor: c.input, color: c.textPrimary }]}
-              placeholder="Cari obrolan"
+              style={[styles.searchInput, { backgroundColor: c.panel, color: c.textPrimary, borderColor: c.hairline }]}
+              placeholder="Cari percakapan atau circle..."
               placeholderTextColor={c.textMuted}
-              value={dmSearch}
-              onChangeText={setDmSearch}
+              value={inboxSearch}
+              onChangeText={setInboxSearch}
             />
-            <View style={styles.filterRow}>
-              {(['all', 'unread'] as const).map((f) => (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 10 }}>
+              {(
+                [
+                  { id: 'all', label: 'Semua' },
+                  { id: 'dm', label: 'Langsung' },
+                  { id: 'circle', label: 'Circle' },
+                  { id: 'hangout', label: 'Kumpul' },
+                ] as { id: InboxFilter; label: string }[]
+              ).map((f) => (
                 <TouchableOpacity
-                  key={f}
+                  key={f.id}
                   style={[
                     styles.filterPill,
-                    { backgroundColor: dmFilter === f ? `${activeAccent}22` : c.input },
+                    { backgroundColor: inboxFilter === f.id ? c.capsuleActiveBg : c.panel },
                   ]}
-                  onPress={() => setDmFilter(f)}
+                  onPress={() => setInboxFilter(f.id)}
                 >
                   <Text
                     style={{
                       fontSize: 12.5,
-                      fontWeight: dmFilter === f ? '600' : '500',
-                      color: dmFilter === f ? activeAccent : c.textSecondary,
+                      fontWeight: '600',
+                      color: inboxFilter === f.id ? c.capsuleActiveText : c.textSecondary,
                     }}
                   >
-                    {f === 'all' ? 'Semua' : 'Belum Dibaca'}
+                    {f.label}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </View>
 
-          <ScrollView style={styles.flex1} contentContainerStyle={{ paddingHorizontal: 12 }}>
-            {dmChannels.map((ch) => {
-              const partnerId = ch.participantIds?.find((id) => id !== currentUserId);
-              const partner = partnerId ? profiles[partnerId] : null;
-              const lastMsg = [...messages].reverse().find((m) => m.channelId === ch.id);
-
-              return (
-                <TouchableOpacity
-                  key={ch.id}
-                  style={[styles.listRow, { borderBottomColor: c.hairline }]}
-                  onPress={() => {
-                    selectChannel(ch.id);
-                    setInThread(true);
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.avatar,
-                      { backgroundColor: partner?.avatarColor ?? activeAccent },
-                    ]}
-                  >
-                    <Text style={styles.avatarText}>{partner?.initials ?? 'ZN'}</Text>
-                  </View>
-                  <View style={styles.flex1}>
-                    <View style={styles.rowBetween}>
-                      <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
-                        {ch.name}
+          <ScrollView style={styles.flex1} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 110 }}>
+            {unifiedInbox.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.inboxCard, { backgroundColor: c.panel, borderColor: c.hairline }]}
+                onPress={() => {
+                  if (item.circleId) selectCircle(item.circleId);
+                  selectChannel(item.channelId);
+                  setInThread(true);
+                }}
+              >
+                <View style={[styles.avatar, { backgroundColor: item.badgeBg, borderRadius: item.kind === 'dm' ? 99 : 13 }]}>
+                  <Text style={styles.avatarText}>{item.badgeText}</Text>
+                </View>
+                <View style={styles.flex1}>
+                  <View style={styles.rowBetween}>
+                    <Text style={[styles.rowTitle, { color: c.textPrimary }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {item.time ? (
+                      <Text style={[styles.meta, { color: c.textMuted }]}>
+                        {formatTime(item.time)}
                       </Text>
-                      {lastMsg && (
-                        <Text style={[styles.meta, { color: c.textMuted }]}>
-                          {formatTime(lastMsg.createdAt)}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.rowBetween}>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.rowSub, { color: c.textSecondary, flex: 1 }]}
-                      >
-                        {lastMsg?.content ?? partner?.statusText ?? ''}
-                      </Text>
-                      {ch.unreadCount > 0 && (
-                        <View style={[styles.badge, { backgroundColor: activeAccent }]}>
-                          <Text style={styles.badgeText}>{ch.unreadCount}</Text>
-                        </View>
-                      )}
-                    </View>
+                    ) : null}
                   </View>
-                </TouchableOpacity>
-              );
-            })}
+                  <View style={styles.rowBetween}>
+                    <Text numberOfLines={1} style={[styles.rowSub, { color: c.textSecondary, flex: 1 }]}>
+                      {item.preview}
+                    </Text>
+                    {item.unread > 0 && (
+                      <View style={[styles.badge, { backgroundColor: c.accent }]}>
+                        <Text style={styles.badgeText}>{item.unread}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         </View>
       )}
 
-      {/* CHAT THREAD VIEW (Warm Textured Surface + Adaptive Circle Accent Bubbles) */}
-      {tab === 'chat' && inThread && activeChannel && (
+      {/* WORLD 2: RUANG THREAD (with Horizontal Topic Pill Bar for Circles!) */}
+      {world === 'ruang' && inThread && activeChannel && (
         <View style={[styles.flex1, { backgroundColor: canvasBg }]}>
-          <View style={[styles.header, { borderBottomColor: c.hairline, backgroundColor: c.glass }]}>
-            <TouchableOpacity onPress={() => setInThread(false)} style={styles.backBtn}>
-              <Text style={{ color: activeAccent, fontWeight: '600', fontSize: 14 }}>Kembali</Text>
-            </TouchableOpacity>
-            <View style={styles.flex1}>
-              <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
-                {activeChannel.name}
-              </Text>
-              {activeChannel.topic && (
-                <Text style={[styles.meta, { color: c.textMuted }]} numberOfLines={1}>
-                  {activeChannel.topic}
+          <View style={[styles.threadHeaderWrap, { backgroundColor: c.panel, borderBottomColor: c.hairline }]}>
+            <View style={styles.threadHeader}>
+              <TouchableOpacity onPress={() => setInThread(false)} style={styles.backBtn}>
+                <Text style={{ color: c.accent, fontWeight: '600', fontSize: 14 }}>← Ruang</Text>
+              </TouchableOpacity>
+              <View style={styles.flex1}>
+                <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
+                  {threadCircle ? threadCircle.name : activeChannel.name}
                 </Text>
-              )}
+                <Text style={[styles.meta, { color: c.textMuted }]} numberOfLines={1}>
+                  {activeChannel.topic ?? `${threadCircle?.memberIds.length ?? 2} peserta`}
+                </Text>
+              </View>
             </View>
+
+            {/* Horizontal Topic Pill Bar (No Discord vertical #channel list!) */}
+            {threadCircle && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 10, gap: 6 }}
+              >
+                {threadTopics.map((topic) => {
+                  const selected = topic.id === activeChannelId;
+                  return (
+                    <TouchableOpacity
+                      key={topic.id}
+                      style={[
+                        styles.topicPill,
+                        { backgroundColor: selected ? c.capsuleActiveBg : c.input },
+                      ]}
+                      onPress={() => selectChannel(topic.id)}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: '600',
+                          color: selected ? c.capsuleActiveText : c.textSecondary,
+                        }}
+                      >
+                        {formatTopicLabel(topic.name)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
 
           <FlatList
@@ -573,12 +947,7 @@ export default function App() {
                 <View>
                   {showDateSeparator && dateLabel && (
                     <View style={styles.dateWrap}>
-                      <Text
-                        style={[
-                          styles.datePill,
-                          { backgroundColor: c.glass, color: c.textSecondary },
-                        ]}
-                      >
+                      <Text style={[styles.datePill, { backgroundColor: c.glass, color: c.textSecondary }]}>
                         {dateLabel}
                       </Text>
                     </View>
@@ -588,11 +957,9 @@ export default function App() {
                     style={[
                       styles.bubble,
                       {
-                        backgroundColor: mine
-                          ? theme === 'light'
-                            ? activeAccent
-                            : c.bubbleOut
-                          : c.bubbleIn,
+                        backgroundColor: mine ? c.bubbleOut : c.bubbleIn,
+                        borderColor: mine ? 'transparent' : c.hairline,
+                        borderWidth: mine ? 0 : 1,
                         alignSelf: mine ? 'flex-end' : 'flex-start',
                         marginTop: isGrouped ? 3 : 10,
                       },
@@ -611,17 +978,12 @@ export default function App() {
                           height: 248,
                           borderRadius: 12,
                           marginBottom: 6,
-                          backgroundColor: '#111827',
+                          backgroundColor: '#1C1917',
                         }}
                         resizeMode="cover"
                       />
                     )}
-                    <Text
-                      style={[
-                        styles.msgText,
-                        { color: mine ? c.bubbleOutText : c.textPrimary },
-                      ]}
-                    >
+                    <Text style={[styles.msgText, { color: mine ? c.bubbleOutText : c.textPrimary }]}>
                       {message.content}
                     </Text>
                     {pin && (
@@ -652,7 +1014,7 @@ export default function App() {
                     <Text
                       style={[
                         styles.bubbleTime,
-                        { color: mine ? 'rgba(255,255,255,0.78)' : c.textMuted },
+                        { color: mine ? 'rgba(250,250,249,0.75)' : c.textMuted },
                       ]}
                     >
                       {formatTime(message.createdAt)}
@@ -663,23 +1025,23 @@ export default function App() {
             }}
           />
 
-          <View style={[styles.composer, { borderTopColor: c.hairline, backgroundColor: c.glass }]}>
+          <View style={[styles.composer, { borderTopColor: c.hairline, backgroundColor: c.panel }]}>
             <TouchableOpacity
               style={[styles.composerAction, { backgroundColor: c.input }]}
-              onPress={handlePickQuickSnap}
+              onPress={() => void handlePickQuickSnap()}
             >
               <Text style={{ color: c.textSecondary, fontWeight: '600', fontSize: 13 }}>Snap</Text>
             </TouchableOpacity>
             <TextInput
               style={[styles.composerInput, { backgroundColor: c.input, color: c.textPrimary }]}
-              placeholder="Tulis pesan"
+              placeholder="Tulis pesan..."
               placeholderTextColor={c.textMuted}
               value={draft}
               onChangeText={setDraft}
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: activeAccent }]}
+              style={[styles.sendBtn, { backgroundColor: c.accent }]}
               onPress={handleSend}
             >
               <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>Kirim</Text>
@@ -688,108 +1050,8 @@ export default function App() {
         </View>
       )}
 
-      {/* TAB 2: CIRCLES WITH COVER BANNER & VOICE LOUNGE */}
-      {tab === 'circles' && (
-        <View style={[styles.flex1, { backgroundColor: c.sidebar }]}>
-          <View style={[styles.circleBanner, { backgroundColor: activeAccent }]}>
-            <Text style={styles.circleBannerTitle}>{activeCircle?.name ?? 'Circles'}</Text>
-            <Text style={styles.circleBannerSub}>
-              {activeCircle?.memberIds.length ?? 0} anggota · {activeCircle?.inviteCode}
-            </Text>
-          </View>
-
-          <ScrollView style={styles.flex1} contentContainerStyle={{ padding: 14, gap: 14 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {circles.map((circle) => {
-                const active = (activeCircleId ?? circles[0]?.id) === circle.id;
-                return (
-                  <TouchableOpacity
-                    key={circle.id}
-                    style={[
-                      styles.filterPill,
-                      { backgroundColor: active ? circle.accentColor : c.elevated },
-                    ]}
-                    onPress={() => selectCircle(circle.id)}
-                  >
-                    <Text
-                      style={{
-                        color: active ? '#FFFFFF' : c.textPrimary,
-                        fontWeight: '600',
-                        fontSize: 13,
-                      }}
-                    >
-                      {circle.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <Text style={[styles.sectionLabel, { color: c.textMuted }]}>KANAL TEKS</Text>
-            {channels
-              .filter((ch) => ch.circleId === (activeCircleId ?? circles[0]?.id))
-              .map((ch) => (
-                <TouchableOpacity
-                  key={ch.id}
-                  style={[styles.channelItem, { backgroundColor: c.elevated, borderColor: c.hairline }]}
-                  onPress={() => {
-                    selectChannel(ch.id);
-                    setTab('chat');
-                    setInThread(true);
-                  }}
-                >
-                  <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
-                    {ch.type === 'hangout' ? 'Pin · ' : '# '}
-                    {ch.name}
-                  </Text>
-                  {ch.topic && (
-                    <Text style={[styles.meta, { color: c.textMuted, marginTop: 2 }]}>
-                      {ch.topic}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-
-            <Text style={[styles.sectionLabel, { color: c.textMuted, marginTop: 4 }]}>
-              VOICE LOUNGE
-            </Text>
-            {voiceLounges
-              .filter((vl) => vl.circleId === (activeCircleId ?? circles[0]?.id))
-              .map((vl) => {
-                const joined = activeVoiceLoungeId === vl.id;
-                return (
-                  <View
-                    key={vl.id}
-                    style={[styles.voiceRow, { backgroundColor: c.elevated, borderColor: c.hairline }]}
-                  >
-                    <View style={styles.flex1}>
-                      <Text style={[styles.rowTitle, { color: c.textPrimary }]}>{vl.name}</Text>
-                      <Text style={[styles.meta, { color: c.textMuted }]}>
-                        {vl.participantIds.length} di ruang suara · {vl.topic}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[
-                        styles.rsvpBtn,
-                        { backgroundColor: joined ? c.danger : activeAccent },
-                      ]}
-                      onPress={() =>
-                        joined ? leaveVoiceLounge() : joinVoiceLounge(vl.id)
-                      }
-                    >
-                      <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 12.5 }}>
-                        {joined ? 'Keluar' : 'Masuk'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* TAB 3: FULL-BLEED COLORFUL MAP + GATHERING HALO + 3-STATE BOTTOM SHEET */}
-      {tab === 'map' && (
+      {/* WORLD 3: PETA (Full-Canvas Live Social Map) */}
+      {world === 'peta' && (
         <View style={[styles.flex1, { backgroundColor: c.mapBg }]}>
           <View style={styles.mapTopOverlay}>
             <View style={[styles.privacyBar, { backgroundColor: c.glass, borderColor: c.hairline }]}>
@@ -798,7 +1060,7 @@ export default function App() {
                   key={mode}
                   style={[
                     styles.privacyPillBtn,
-                    myPrivacy === mode && { backgroundColor: activeAccent },
+                    { backgroundColor: myPrivacy === mode ? c.accent : 'transparent' },
                   ]}
                   onPress={() => {
                     setMyPrivacyMode(mode);
@@ -818,9 +1080,9 @@ export default function App() {
                 >
                   <Text
                     style={{
-                      fontSize: 12,
-                      fontWeight: '600',
                       color: myPrivacy === mode ? '#FFFFFF' : c.textSecondary,
+                      fontWeight: '600',
+                      fontSize: 12,
                     }}
                   >
                     {mode === 'exact' ? 'Tepat' : mode === 'fuzzy' ? 'Area' : 'Ghost'}
@@ -828,42 +1090,52 @@ export default function App() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <TouchableOpacity
+              style={[styles.gpsBtn, { backgroundColor: c.glass, borderColor: c.hairline }]}
+              onPress={() => void handleUpdateGps()}
+              disabled={locatingGps}
+            >
+              <Text style={{ color: c.textPrimary, fontWeight: '600', fontSize: 12 }}>
+                {locatingGps ? '...' : 'GPS'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.mapStage}>
-            {/* Warm Gathering Halo visual */}
-            <View style={styles.mobileGatheringHalo} />
+          <View style={styles.mapCanvas}>
+            <View style={[styles.heroMapBlob, { backgroundColor: c.mapPark, left: 20, top: 64, width: 150, height: 110 }]} />
+            <View style={[styles.heroMapBlob, { backgroundColor: c.mapWater, right: 16, top: 140, width: 160, height: 64 }]} />
 
             {clusters.map((cluster, idx) => {
-              const first = cluster.items[0];
+              const top = 76 + idx * 54;
+              const left = 24 + (idx % 2) * 140;
+              if (cluster.isCluster) {
+                return (
+                  <View key={cluster.id} style={[styles.mapMarker, { top, left }]}>
+                    <View style={[styles.clusterBadge, { backgroundColor: c.accent }]}>
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>
+                        +{cluster.items.length}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+              const entry = cluster.items[0];
               return (
                 <TouchableOpacity
-                  key={cluster.id}
-                  style={[
-                    styles.mapPinPos,
-                    {
-                      left: `${18 + ((idx * 26) % 58)}%`,
-                      top: `${24 + ((idx * 18) % 34)}%`,
-                    },
-                  ]}
+                  key={entry.userId}
+                  style={[styles.mapMarker, { top, left }]}
                   onPress={() => {
-                    setSelectedMapUser(first.userId);
+                    setSelectedMapUser(entry.userId);
                     setSheetSnap('half');
                   }}
                 >
-                  <View
-                    style={[
-                      styles.mapAvatarRing,
-                      { backgroundColor: first.profile.avatarColor },
-                    ]}
-                  >
-                    <Text style={styles.avatarText}>
-                      {cluster.isCluster ? `+${cluster.items.length}` : first.profile.initials}
-                    </Text>
+                  <View style={[styles.avatar, { backgroundColor: entry.profile.avatarColor, borderWidth: 3, borderColor: '#FFFFFF' }]}>
+                    <Text style={styles.avatarText}>{entry.profile.initials}</Text>
                   </View>
-                  <View style={[styles.mapTag, { backgroundColor: c.glass }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: c.textPrimary }}>
-                      {first.profile.displayName}
+                  <View style={[styles.markerTag, { backgroundColor: c.glass }]}>
+                    <Text style={{ color: c.textPrimary, fontSize: 11, fontWeight: '600' }}>
+                      {entry.profile.displayName}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -871,228 +1143,258 @@ export default function App() {
             })}
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.mapFab,
-              {
-                bottom: 204,
-                backgroundColor: c.glass,
-                borderWidth: 1,
-                borderColor: c.hairline,
-              },
-            ]}
-            onPress={handleUpdateGps}
-            disabled={locatingGps}
-          >
-            <Text style={{ color: c.textPrimary, fontSize: 11, fontWeight: '700' }}>
-              {locatingGps ? '...' : 'GPS'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.mapFab, { backgroundColor: activeAccent }]}
-            onPress={handleQuickHangout}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '600' }}>+</Text>
-          </TouchableOpacity>
-
           <View
             style={[
-              styles.bottomSheet,
+              styles.mapSheet,
               {
                 backgroundColor: c.glass,
                 borderColor: c.hairline,
-                height: sheetSnap === 'peek' ? 116 : sheetSnap === 'half' ? 248 : 390,
+                height: sheetSnap === 'peek' ? 110 : sheetSnap === 'half' ? 185 : 270,
               },
             ]}
           >
-            <TouchableOpacity style={styles.grabberHit} onPress={cycleSheet}>
-              <View style={[styles.grabberBar, { backgroundColor: c.textMuted }]} />
+            <TouchableOpacity
+              style={styles.grabberHit}
+              onPress={() =>
+                setSheetSnap((s) => (s === 'peek' ? 'half' : s === 'half' ? 'expanded' : 'peek'))
+              }
+            >
+              <View style={[styles.grabber, { backgroundColor: c.textMuted }]} />
             </TouchableOpacity>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
               <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
-                {visibleFriends.length} teman aktif · {hangoutPins.length} pin kumpul
+                {visibleFriends.length} teman aktif · {visibleHangouts.length} pin kumpul
               </Text>
-              {visibleFriends.map(({ userId, loc, profile, coords }) => (
-                <View
-                  key={userId}
-                  style={[
-                    styles.sheetCard,
-                    {
-                      backgroundColor: c.elevated,
-                      borderColor: selectedMapUserId === userId ? activeAccent : c.hairline,
-                    },
-                  ]}
-                >
-                  <View style={[styles.avatarSm, { backgroundColor: profile.avatarColor }]}>
-                    <Text style={styles.avatarText}>{profile.initials}</Text>
-                  </View>
-                  <View style={styles.flex1}>
-                    <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
-                      {profile.displayName}
+              {visibleFriends.map(({ userId, loc, profile, coords }) => {
+                const dist =
+                  myLocation && coords
+                    ? `${formatDistanceLabel(distanceMeters(myLocation.point, coords))} · ~${estimateEtaMinutes(myLocation.point, coords)} mnt`
+                    : loc.areaLabel;
+                return (
+                  <View
+                    key={userId}
+                    style={[
+                      styles.sheetRow,
+                      {
+                        backgroundColor: selectedMapUserId === userId ? c.accentSoft : c.panel,
+                        borderColor: c.hairline,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: c.textPrimary, fontWeight: '600', fontSize: 13 }}>
+                      {profile.displayName} · {loc.areaLabel}
                     </Text>
-                    <Text style={[styles.meta, { color: c.textMuted }]}>
-                      {loc.areaLabel}
-                      {myLocation && coords && loc.privacyMode === 'exact'
-                        ? ` · ${formatDistanceLabel(distanceMeters(myLocation.point, coords))} · ~${estimateEtaMinutes(myLocation.point, coords)} mnt`
-                        : ' · Area perkiraan'}
-                    </Text>
+                    <Text style={[styles.meta, { color: c.textMuted }]}>{dist}</Text>
                   </View>
-                  <Text style={[styles.meta, { color: c.textMuted }]}>{loc.batteryPct}%</Text>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           </View>
         </View>
       )}
 
-      {/* TAB 4: PROFIL & 4 TEMA CHAT */}
-      {tab === 'profile' && me && (
-        <ScrollView
-          style={[styles.flex1, { backgroundColor: c.sidebar }]}
-          contentContainerStyle={{ padding: 16, gap: 14 }}
-        >
-          <Text style={[styles.headerTitle, { color: c.textPrimary }]}>Profil</Text>
-          <View style={styles.profileRow}>
-            <View style={[styles.avatarLg, { backgroundColor: me.avatarColor }]}>
-              <Text style={[styles.avatarText, { fontSize: 18 }]}>{me.initials}</Text>
-            </View>
-            <View style={styles.flex1}>
-              <Text style={[styles.rowTitle, { color: c.textPrimary, fontSize: 16 }]}>
-                {me.displayName}
-              </Text>
-              <Text style={[styles.meta, { color: c.textMuted }]}>
-                @{me.username} · {me.statusText}
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.elevated }]}>
-            <Text style={[styles.rowTitle, { color: c.textPrimary }]}>Sinkronisasi Cloud</Text>
-            <Text style={{ color: cloudSynced ? activeAccent : c.textMuted, fontWeight: '600', fontSize: 12.5 }}>
-              {cloudSynced
-                ? 'Supabase Realtime Aktif'
-                : mobileCloudBackend.isConfigured()
-                  ? 'Siap Login Cloud'
-                  : 'Mode Lokal (Offline)'}
+      {/* Persistent Floating Voice Island (above Floating Capsule Dock!) */}
+      {activeVoice && (
+        <View style={[styles.voiceIsland, { bottom: showFloatingDock ? 88 : 68 }]}>
+          <View style={styles.flex1}>
+            <Text style={{ color: '#FAFAF9', fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
+              {activeVoice.name} · {activeVoice.participantIds.length} peserta
             </Text>
+            <Text style={{ color: 'rgba(245,243,239,0.7)', fontSize: 11 }}>
+              Ruang Suara Aktif
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.islandBtn} onPress={toggleMute}>
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
+              {isMuted ? 'Buka Mic' : 'Mute'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.islandBtn, { backgroundColor: c.danger }]}
+            onPress={leaveVoiceLounge}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>Keluar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Floating Capsule Bottom Dock (3 Worlds + Terracotta + FAB) */}
+      {showFloatingDock && (
+        <View style={styles.dockWrap}>
+          <View style={[styles.dockCapsule, { backgroundColor: c.glass, borderColor: c.hairline }]}>
+            {(
+              [
+                { id: 'pulse', label: 'Pulse' },
+                { id: 'ruang', label: 'Ruang' },
+                { id: 'peta', label: 'Peta' },
+              ] as { id: MobileWorld; label: string }[]
+            ).map((item) => {
+              const active = world === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.dockBtn,
+                    { backgroundColor: active ? c.capsuleActiveBg : 'transparent' },
+                  ]}
+                  onPress={() => {
+                    setWorld(item.id);
+                    if (item.id === 'ruang') setInThread(false);
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: active ? '700' : '500',
+                      color: active ? c.capsuleActiveText : c.textSecondary,
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <TouchableOpacity
-            style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.elevated }]}
-            onPress={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            style={[styles.dockFab, { backgroundColor: c.accent }]}
+            onPress={handleFabCreate}
           >
-            <Text style={[styles.rowTitle, { color: c.textPrimary }]}>Mode Tampilan</Text>
-            <Text style={{ color: activeAccent, fontWeight: '600', fontSize: 13 }}>
-              {theme === 'dark' ? 'Mode Gelap' : 'Mode Terang'}
-            </Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '600', lineHeight: 26 }}>+</Text>
           </TouchableOpacity>
+        </View>
+      )}
 
-          <Text style={[styles.sectionLabel, { color: c.textMuted }]}>TEMA WALLPAPER CHAT</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {CHAT_THEMES.map((item) => (
+      {/* Circle Selector Modal */}
+      <Modal visible={circlePickerOpen} transparent animationType="fade" onRequestClose={() => setCirclePickerOpen(false)}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setCirclePickerOpen(false)}
+        >
+          <View style={[styles.modalCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: 10 }]}>
+              Pilih Circle
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.sheetRow,
+                { backgroundColor: activeCircleId === null ? c.accentSoft : c.canvas, borderColor: c.hairline },
+              ]}
+              onPress={() => {
+                selectCircle(null);
+                setCirclePickerOpen(false);
+              }}
+            >
+              <Text style={{ color: c.textPrimary, fontWeight: '600' }}>Semua Circle</Text>
+            </TouchableOpacity>
+            {circles.map((ci) => (
               <TouchableOpacity
-                key={item.id}
+                key={ci.id}
                 style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: chatTheme === item.id ? activeAccent : c.elevated,
-                  },
+                  styles.sheetRow,
+                  { backgroundColor: activeCircleId === ci.id ? c.accentSoft : c.canvas, borderColor: c.hairline },
                 ]}
-                onPress={() => setChatTheme(item.id)}
+                onPress={() => {
+                  selectCircle(ci.id);
+                  setCirclePickerOpen(false);
+                }}
               >
-                <Text
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: '600',
-                    color: chatTheme === item.id ? '#FFFFFF' : c.textPrimary,
-                  }}
-                >
-                  {item.label}
+                <Text style={{ color: c.textPrimary, fontWeight: '600' }}>{ci.name}</Text>
+                <Text style={[styles.meta, { color: c.textMuted }]}>
+                  {ci.memberIds.length} anggota · {ci.inviteCode}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+        </TouchableOpacity>
+      </Modal>
 
-          <View style={[styles.settingRow, { borderColor: c.hairline, backgroundColor: c.elevated }]}>
-            <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
-              Pengguna Diblokir ({blockedUserIds.length})
-            </Text>
+      {/* Profile & Settings Modal (Opened from Header Avatar) */}
+      <Modal visible={profileModalOpen} animationType="slide" onRequestClose={() => setProfileModalOpen(false)}>
+        <SafeAreaView style={[styles.root, { backgroundColor: c.canvas }]}>
+          <View style={[styles.topBar, { borderBottomColor: c.hairline, backgroundColor: c.panel }]}>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Profil & Pengaturan</Text>
+            <TouchableOpacity onPress={() => setProfileModalOpen(false)}>
+              <Text style={{ color: c.accent, fontWeight: '600', fontSize: 14 }}>Selesai</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+            <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+              <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
+                {me?.displayName ?? 'Reza'} (@{me?.username ?? 'syahreza'})
+              </Text>
+              <Text style={[styles.meta, { color: c.textSecondary, marginTop: 2 }]}>
+                {me?.statusEmoji} {me?.statusText}
+              </Text>
+            </View>
+
+            <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+              <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: 8 }]}>
+                Tema Kanvas Obrolan
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {CHAT_THEMES.map((ct) => (
+                  <TouchableOpacity
+                    key={ct.id}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: chatTheme === ct.id ? c.accent : c.input },
+                    ]}
+                    onPress={() => setChatTheme(ct.id)}
+                  >
+                    <Text
+                      style={{
+                        color: chatTheme === ct.id ? '#FFFFFF' : c.textPrimary,
+                        fontSize: 12.5,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {ct.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             {blockedUserIds.length > 0 && (
-              <TouchableOpacity onPress={() => unblockUser(blockedUserIds[0])}>
-                <Text style={{ color: activeAccent, fontSize: 13 }}>Buka</Text>
-              </TouchableOpacity>
+              <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+                <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: 8 }]}>
+                  Pengguna Diblokir
+                </Text>
+                {blockedUserIds.map((uid) => (
+                  <View key={uid} style={styles.rowBetween}>
+                    <Text style={{ color: c.textPrimary }}>{profiles[uid]?.displayName ?? uid}</Text>
+                    <TouchableOpacity onPress={() => unblockUser(uid)}>
+                      <Text style={{ color: c.accent, fontWeight: '600' }}>Buka Blokir</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             )}
-          </View>
 
-          <TouchableOpacity
-            style={[styles.dangerBtn, { borderColor: c.danger }]}
-            onPress={deleteMyAccount}
-          >
-            <Text style={{ color: c.danger, fontWeight: '600', fontSize: 14 }}>
-              Hapus Akun Permanen
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-
-      {/* Floating Compact Voice Pill above Bottom Bar */}
-      {activeVoice && (
-        <View style={[styles.floatingVoicePill, { backgroundColor: activeAccent }]}>
-          <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
-            Suara aktif · {activeVoice.name}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity onPress={toggleMute}>
-              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 12.5 }}>
-                {isMuted ? 'Buka Mic' : 'Mute'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={leaveVoiceLounge}>
-              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12.5 }}>Keluar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Native 4-Tab Bottom Bar */}
-      <View
-        style={[
-          styles.bottomBar,
-          { backgroundColor: c.elevated, borderTopColor: c.hairline },
-        ]}
-      >
-        {(
-          [
-            { id: 'chat', label: 'Chat' },
-            { id: 'circles', label: 'Circles' },
-            { id: 'map', label: 'Map' },
-            { id: 'profile', label: 'Profil' },
-          ] as { id: MobileTab; label: string }[]
-        ).map((item) => {
-          const active = tab === item.id;
-          return (
             <TouchableOpacity
-              key={item.id}
-              style={styles.tabBtn}
-              onPress={() => {
-                setTab(item.id);
-                if (item.id === 'chat') setInThread(false);
-              }}
+              style={[styles.dangerBtn, { borderColor: c.danger }]}
+              onPress={() =>
+                Alert.alert('Hapus Akun', 'Hapus akun dan data lokal secara permanen?', [
+                  { text: 'Batal', style: 'cancel' },
+                  {
+                    text: 'Hapus',
+                    style: 'destructive',
+                    onPress: () => {
+                      deleteMyAccount();
+                      setProfileModalOpen(false);
+                    },
+                  },
+                ])
+              }
             >
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: active ? '600' : '500',
-                  color: active ? activeAccent : c.textMuted,
-                }}
-              >
-                {item.label}
-              </Text>
+              <Text style={{ color: c.danger, fontWeight: '700' }}>Hapus Akun Permanen</Text>
             </TouchableOpacity>
-          );
-        })}
-      </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1100,75 +1402,184 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex1: { flex: 1 },
-  header: {
+  topBar: {
     height: 54,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  circleSelectorPill: {
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: 210,
+  },
+  selectorDot: { width: 8, height: 8, borderRadius: 99 },
+  selectorLabel: { fontSize: 13.5, fontWeight: '600' },
+  topRightRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topIconBtn: {
+    height: 34,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroMapCard: {
+    height: 230,
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  heroMapBlob: { position: 'absolute', borderRadius: 48, opacity: 0.72 },
+  heroMapTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  heroLiveChip: {
+    height: 30,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveDot: { width: 7, height: 7, borderRadius: 99 },
+  heroExpandBtn: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroAvatarRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  heroFriendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  bentoCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 15,
+  },
+  sectionTitle: { fontSize: 15.5, fontWeight: '700' },
+  momentCardCreate: {
+    width: 116,
+    height: 156,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    gap: 8,
+  },
+  momentPlusBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 99,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  momentCard: {
+    width: 116,
+    height: 156,
+    borderRadius: 16,
+    padding: 10,
+    justifyContent: 'flex-end',
+  },
+  momentAuthor: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
+  momentCaption: { color: 'rgba(255,255,255,0.88)', fontSize: 11, marginTop: 2 },
+  voiceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 15,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  actionPill: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchWrap: { padding: 14, paddingBottom: 10 },
+  searchInput: {
+    height: 40,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
+  filterPill: {
+    height: 30,
+    paddingHorizontal: 13,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inboxCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  avatar: { width: 42, height: 42, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  avatarSm: { width: 34, height: 34, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  avatarXs: { width: 24, height: 24, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  avatarTextXs: { color: '#FFFFFF', fontWeight: '700', fontSize: 10 },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  rowTitle: { fontSize: 14.5, fontWeight: '600' },
+  rowSub: { fontSize: 12.5, marginTop: 2 },
+  meta: { fontSize: 11.5 },
+  badge: { minWidth: 20, height: 20, borderRadius: 99, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  threadHeaderWrap: { borderBottomWidth: 1 },
+  threadHeader: {
+    height: 54,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700' },
-  backBtn: { paddingRight: 6, paddingVertical: 6 },
-  storyRing: {
-    padding: 2.5,
-    borderRadius: 99,
-    borderWidth: 2,
-  },
-  searchWrap: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, gap: 8 },
-  searchInput: { height: 38, borderRadius: 10, paddingHorizontal: 12, fontSize: 14 },
-  filterRow: { flexDirection: 'row', gap: 8 },
-  filterPill: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 999 },
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-  },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  rowTitle: { fontSize: 14.5, fontWeight: '600' },
-  rowSub: { fontSize: 13.5, marginTop: 2 },
-  meta: { fontSize: 11.5 },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  headerTitle: { fontSize: 16, fontWeight: '700' },
+  backBtn: { paddingVertical: 6, paddingRight: 6 },
+  topicPill: {
+    height: 30,
+    paddingHorizontal: 13,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarSm: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLg: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: '#FFFFFF', fontWeight: '600', fontSize: 13 },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   dateWrap: { alignItems: 'center', marginVertical: 10 },
-  datePill: { fontSize: 11.5, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  bubble: { maxWidth: '82%', borderRadius: 17, paddingHorizontal: 12, paddingVertical: 8 },
+  datePill: { fontSize: 11.5, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 99, overflow: 'hidden' },
+  bubble: { maxWidth: '82%', borderRadius: 18, paddingHorizontal: 13, paddingVertical: 9 },
   senderLabel: { fontSize: 11.5, fontWeight: '600', marginBottom: 2 },
-  msgText: { fontSize: 14.5, lineHeight: 21 },
-  bubbleTime: { fontSize: 10.5, alignSelf: 'flex-end', marginTop: 3 },
+  msgText: { fontSize: 14.5, lineHeight: 20 },
+  bubbleTime: { fontSize: 10.5, textAlign: 'right', marginTop: 4 },
   rsvpRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  rsvpBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  rsvpBtn: { flex: 1, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   composer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1176,111 +1587,111 @@ const styles = StyleSheet.create({
     padding: 10,
     borderTopWidth: 1,
   },
-  composerAction: { paddingHorizontal: 12, height: 38, borderRadius: 19, justifyContent: 'center' },
-  composerInput: { flex: 1, height: 38, borderRadius: 19, paddingHorizontal: 14, fontSize: 14.5 },
-  sendBtn: { paddingHorizontal: 15, height: 38, borderRadius: 19, justifyContent: 'center' },
-  circleBanner: { paddingHorizontal: 16, paddingTop: 22, paddingBottom: 14 },
-  circleBannerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  circleBannerSub: { color: 'rgba(255,255,255,0.88)', fontSize: 12, marginTop: 2 },
-  sectionLabel: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.4 },
-  channelItem: { padding: 12, borderRadius: 12, borderWidth: 1 },
-  voiceRow: {
+  composerAction: { height: 38, paddingHorizontal: 12, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  composerInput: { flex: 1, height: 40, borderRadius: 99, paddingHorizontal: 14, fontSize: 14 },
+  sendBtn: { height: 38, paddingHorizontal: 15, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  mapTopOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    zIndex: 10,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 12,
+  },
+  privacyBar: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: 999,
     borderWidth: 1,
+    gap: 3,
   },
-  mapTopOverlay: { position: 'absolute', top: 14, left: 14, right: 14, zIndex: 10, alignItems: 'flex-end' },
-  privacyBar: { flexDirection: 'row', padding: 3, borderRadius: 999, borderWidth: 1 },
-  privacyPillBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  mapStage: { flex: 1, position: 'relative' },
-  mobileGatheringHalo: {
+  privacyPillBtn: { height: 30, paddingHorizontal: 11, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  gpsBtn: { height: 36, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  mapCanvas: { flex: 1 },
+  mapMarker: { position: 'absolute', alignItems: 'center', gap: 4 },
+  clusterBadge: { width: 42, height: 42, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  markerTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
+  mapSheet: {
     position: 'absolute',
-    left: '50%',
-    top: '44%',
-    width: 110,
-    height: 110,
-    marginLeft: -55,
-    marginTop: -55,
-    borderRadius: 55,
-    backgroundColor: 'rgba(245, 158, 11, 0.24)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(245, 158, 11, 0.45)',
-  },
-  mapPinPos: { position: 'absolute', alignItems: 'center' },
-  mapAvatarRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapTag: { marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  mapFab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 266,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 12,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 10,
-    borderRadius: 18,
+    left: 12,
+    right: 12,
+    bottom: 86,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
-    zIndex: 11,
   },
   grabberHit: { alignItems: 'center', paddingVertical: 10 },
-  grabberBar: { width: 38, height: 4, borderRadius: 99, opacity: 0.4 },
-  sheetCard: {
+  grabber: { width: 38, height: 4, borderRadius: 99, opacity: 0.45 },
+  sheetRow: { padding: 11, borderRadius: 13, borderWidth: 1, marginBottom: 6 },
+  voiceIsland: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(25, 24, 28, 0.95)',
+  },
+  islandBtn: {
+    height: 30,
+    paddingHorizontal: 11,
+    borderRadius: 99,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dockWrap: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
   },
-  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
+  dockCapsule: {
+    flex: 1,
+    height: 54,
+    padding: 5,
+    borderRadius: 999,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dockBtn: {
+    flex: 1,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dockFab: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 18,
   },
   dangerBtn: {
-    padding: 13,
-    borderRadius: 12,
-    borderWidth: 1,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1.5,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  floatingVoicePill: {
-    marginHorizontal: 12,
-    marginBottom: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bottomBar: {
-    height: 56,
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%' },
 });

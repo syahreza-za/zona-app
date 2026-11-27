@@ -1,27 +1,21 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import {
-  Map,
-  MessageCircle,
-  Mic,
-  MicOff,
-  PhoneOff,
-  User,
-  Users,
-  Volume2,
-} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   useZonaStore,
   type Coordinates,
   type Message,
 } from '@zona/shared';
 import { AuthOnboarding } from './components/AuthOnboarding';
-import { CircleRail } from './components/CircleRail';
-import { ChannelSidebar } from './components/ChannelSidebar';
+import { HorizonBar, type HorizonWorld } from './components/HorizonBar';
+import { PulseHomeView } from './components/PulseHomeView';
+import { RuangInboxSidebar } from './components/RuangInboxSidebar';
 import { ChatPanel } from './components/ChatPanel';
 import { SocialMapPanel } from './components/SocialMapPanel';
 import { VoiceStageView } from './components/VoiceStageView';
+import { VoiceIsland } from './components/VoiceIsland';
+import { MobileCapsuleDock } from './components/MobileCapsuleDock';
 import { StoryViewerModal } from './components/StoryViewerModal';
 import { HangoutModal } from './components/HangoutModal';
+import { QuickSnapModal } from './components/QuickSnapModal';
 import { CircleManageModal } from './components/CircleManageModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import {
@@ -29,9 +23,6 @@ import {
   saveWorkspaceSnapshot,
 } from './services/offlineDb';
 import { webCloudBackend, zonaCloudSync } from './services/cloudSync';
-import { zonaVoiceEngine } from './services/livekitVoice';
-
-type MobileTab = 'chat' | 'circles' | 'map' | 'profile';
 
 export function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -44,11 +35,10 @@ export function App() {
     return 'light';
   });
 
-  const [fullMapMode, setFullMapMode] = useState(false);
+  // ZONA Original 3-World Architecture: Pulse (default) · Ruang · Peta
+  const [world, setWorld] = useState<HorizonWorld>('pulse');
+  const [mobileRuangView, setMobileRuangView] = useState<'list' | 'thread'>('list');
   const [voiceStageOpen, setVoiceStageOpen] = useState(false);
-  const [splitMapOpen, setSplitMapOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<MobileTab>('chat');
-  const [mobileChatView, setMobileChatView] = useState<'list' | 'thread'>('list');
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 899 : false
   );
@@ -59,16 +49,9 @@ export function App() {
     index: number;
   } | null>(null);
 
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 899px)');
-    const update = () => setIsMobileViewport(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
-
   const [circleModalOpen, setCircleModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickSnapOpen, setQuickSnapOpen] = useState(false);
   const [hangoutModal, setHangoutModal] = useState<{
     open: boolean;
     coords: Coordinates;
@@ -79,25 +62,37 @@ export function App() {
     placeName: 'M Bloc Space',
   });
 
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 899px)');
+    const update = () => setIsMobileViewport(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   const isAuthenticated = useZonaStore((s) => s.isAuthenticated);
   const backendMode = useZonaStore((s) => s.backendMode);
   const chatTheme = useZonaStore((s) => s.chatTheme);
   const activeCircleId = useZonaStore((s) => s.activeCircleId);
   const activeChannelId = useZonaStore((s) => s.activeChannelId);
   const activeVoiceLoungeId = useZonaStore((s) => s.activeVoiceLoungeId);
-  const isMuted = useZonaStore((s) => s.isMuted);
   const circles = useZonaStore((s) => s.circles);
+  const channels = useZonaStore((s) => s.channels);
   const voiceLounges = useZonaStore((s) => s.voiceLounges);
+  const selectChannel = useZonaStore((s) => s.selectChannel);
+  const sendQuickSnap = useZonaStore((s) => s.sendQuickSnap);
   const createHangoutPin = useZonaStore((s) => s.createHangoutPin);
   const joinCircleByCode = useZonaStore((s) => s.joinCircleByCode);
   const setOnlineStatus = useZonaStore((s) => s.setOnlineStatus);
-  const toggleMute = useZonaStore((s) => s.toggleMute);
-  const leaveVoiceLounge = useZonaStore((s) => s.leaveVoiceLounge);
   const hydrateSnapshot = useZonaStore((s) => s.hydrateSnapshot);
 
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
-  const activeCircle = circles.find((c) => c.id === activeCircleId);
   const cloudBackend = webCloudBackend;
+
+  const totalUnread = channels
+    .filter((ch) => !ch.isArchived)
+    .filter((ch) => (!activeCircleId ? true : ch.circleId === null || ch.circleId === activeCircleId))
+    .reduce((sum, ch) => sum + ch.unreadCount, 0);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -231,7 +226,7 @@ export function App() {
     }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#0F1117' : '#E8EBF0');
+      meta.setAttribute('content', theme === 'dark' ? '#111012' : '#F7F5F0');
     }
   }, [theme]);
 
@@ -239,49 +234,31 @@ export function App() {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   }, []);
 
-  // Per-Circle Dynamic Accent Adaptation (Emerald, Sky Blue, Amber, Coral, Teal)
-  const dynamicAccentStyle = useMemo<CSSProperties>(() => {
-    const accent = activeCircle?.accentColor ?? '#10B981';
-    const isSky = accent.toLowerCase() === '#0ea5e9';
-    const isAmber = accent.toLowerCase() === '#d97706';
-    const isCoral = accent.toLowerCase() === '#ea580c';
-    const isTeal = accent.toLowerCase() === '#0d9488';
+  const handleOpenHangout = useCallback((coords?: Coordinates, placeGuess?: string) => {
+    setHangoutModal((m) => ({
+      open: true,
+      coords: coords ?? m.coords,
+      placeName: placeGuess ?? m.placeName,
+    }));
+  }, []);
 
-    const hover = isSky
-      ? '#0284C7'
-      : isAmber
-        ? '#B45309'
-        : isCoral
-          ? '#C2410C'
-          : isTeal
-            ? '#0F766E'
-            : '#059669';
+  const handleOpenChannelInRuang = useCallback(
+    (channelId: string) => {
+      selectChannel(channelId);
+      setVoiceStageOpen(false);
+      setWorld('ruang');
+      setMobileRuangView('thread');
+    },
+    [selectChannel]
+  );
 
-    const bubbleOutLight = isSky
-      ? 'linear-gradient(180deg, #0EA5E9 0%, #0284C7 100%)'
-      : isAmber
-        ? 'linear-gradient(180deg, #D97706 0%, #B45309 100%)'
-        : isCoral
-          ? 'linear-gradient(180deg, #EA580C 0%, #C2410C 100%)'
-          : 'linear-gradient(180deg, #10B981 0%, #059669 100%)';
-
-    const bubbleOutDark = isSky
-      ? '#163D5C'
-      : isAmber
-        ? '#4D3314'
-        : isCoral
-          ? '#522515'
-          : '#134E4A';
-
-    return {
-      '--accent': accent,
-      '--accent-hover': hover,
-      '--accent-soft': `${accent}1F`,
-      '--bubble-out-bg': theme === 'dark' ? bubbleOutDark : bubbleOutLight,
-      '--bubble-out-text': '#FFFFFF',
-      '--bubble-out-meta': 'rgba(255, 255, 255, 0.82)',
-    } as CSSProperties;
-  }, [activeCircle?.accentColor, theme]);
+  const handleChangeWorld = useCallback((nextWorld: HorizonWorld) => {
+    setVoiceStageOpen(false);
+    setWorld(nextWorld);
+    if (nextWorld === 'ruang') {
+      setMobileRuangView('list');
+    }
+  }, []);
 
   if (!isAuthenticated) {
     return (
@@ -297,222 +274,139 @@ export function App() {
     );
   }
 
-  // Desktop-only full-screen map state must NEVER hide mobile tabs or blank out <900px viewports
-  const effectiveFullMap = !isMobileViewport && fullMapMode;
-
-  const shellClass = effectiveFullMap
-    ? 'zona-shell full-map-mode'
-    : splitMapOpen && !isMobileViewport
-      ? 'zona-shell with-split-map'
-      : 'zona-shell';
+  const hideMobileDock =
+    !isMobileViewport ||
+    voiceStageOpen ||
+    (world === 'ruang' && mobileRuangView === 'thread');
 
   return (
     <div
-      className={shellClass}
-      style={dynamicAccentStyle}
+      className={`zona-app-shell world-${world}`}
       data-chat-theme={chatTheme}
-      data-mobile-tab={mobileTab}
-      data-mobile-view={mobileChatView}
+      data-world={world}
+      data-mobile-ruang={mobileRuangView}
     >
-      <CircleRail
+      {/* Top Horizon Bar (Replaces Discord Left Vertical Rail!) */}
+      <HorizonBar
+        world={world}
+        onChangeWorld={handleChangeWorld}
         theme={theme}
         onToggleTheme={toggleTheme}
-        fullMapMode={effectiveFullMap}
-        onToggleFullMap={() => {
-          setFullMapMode((v) => !v);
-          setVoiceStageOpen(false);
-        }}
-        onSelectChatSpace={() => {
-          setFullMapMode(false);
-          setVoiceStageOpen(false);
-        }}
+        onOpenHangoutModal={() => handleOpenHangout()}
         onOpenCircleModal={() => setCircleModalOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onNotify={notify}
       />
 
-      {!effectiveFullMap && (
-        <ChannelSidebar
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          cloudBackend={cloudBackend}
-          mobileMode={
-            isMobileViewport && (mobileTab === 'chat' || mobileTab === 'circles')
-              ? mobileTab
-              : undefined
-          }
-          onChannelPicked={() => {
-            setVoiceStageOpen(false);
-            setMobileTab('chat');
-            setMobileChatView('thread');
-          }}
-          onOpenVoiceStage={() => {
-            setFullMapMode(false);
-            setVoiceStageOpen(true);
-            setMobileTab('chat');
-            setMobileChatView('thread');
-          }}
-          onOpenStory={(stories, index) => setStoryState({ stories, index })}
-          onOpenCircleModal={() => setCircleModalOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onNotify={notify}
-        />
-      )}
-
-      {!effectiveFullMap &&
-        (voiceStageOpen && activeVoice ? (
-          <VoiceStageView
-            onCloseStage={() => setVoiceStageOpen(false)}
-            onNotify={notify}
-          />
-        ) : (
-          <ChatPanel
+      {/* Main Content Stage: 3 Original Worlds (Pulse · Ruang · Peta) or Full Voice Stage */}
+      <div className="zona-stage">
+        {voiceStageOpen && activeVoice ? (
+          <div className="zona-voice-stage-wrap">
+            <VoiceStageView
+              onCloseStage={() => setVoiceStageOpen(false)}
+              onNotify={notify}
+            />
+          </div>
+        ) : world === 'pulse' ? (
+          <PulseHomeView
             theme={theme}
-            splitMapOpen={splitMapOpen}
-            onToggleSplitMap={() => setSplitMapOpen((v) => !v)}
-            onBackMobile={() => setMobileChatView('list')}
-            onOpenHangoutModal={() =>
-              setHangoutModal((m) => ({ ...m, open: true }))
-            }
-            onFocusMapPin={(pinId) => {
-              setHighlightedPinId(pinId);
-              setSplitMapOpen(true);
-              setMobileTab('map');
+            cloudBackend={cloudBackend}
+            onExpandMap={(pinId) => {
+              if (pinId) setHighlightedPinId(pinId);
+              setWorld('peta');
             }}
+            onOpenChannelInRuang={handleOpenChannelInRuang}
+            onOpenRuangAll={() => handleChangeWorld('ruang')}
+            onOpenStory={(stories, index) => setStoryState({ stories, index })}
+            onOpenQuickSnap={() => setQuickSnapOpen(true)}
+            onOpenHangoutModal={handleOpenHangout}
+            onOpenVoiceStage={() => setVoiceStageOpen(true)}
             onNotify={notify}
           />
-        ))}
+        ) : world === 'ruang' ? (
+          <div className={`ruang-layout mobile-${mobileRuangView}`}>
+            <RuangInboxSidebar
+              onConversationPicked={() => setMobileRuangView('thread')}
+              onOpenCircleModal={() => setCircleModalOpen(true)}
+              onNotify={notify}
+            />
+            <ChatPanel
+              theme={theme}
+              cloudBackend={cloudBackend}
+              onBackMobile={() => setMobileRuangView('list')}
+              onOpenHangoutModal={() => handleOpenHangout()}
+              onFocusMapPin={(pinId) => {
+                setHighlightedPinId(pinId);
+                setWorld('peta');
+              }}
+              onOpenVoiceStage={() => setVoiceStageOpen(true)}
+              onNotify={notify}
+            />
+          </div>
+        ) : (
+          <div className="peta-full-wrap">
+            <SocialMapPanel
+              theme={theme}
+              variant="full"
+              circleFilterOverride={activeCircleId ?? undefined}
+              onRequestPinAt={(coords, placeGuess) => handleOpenHangout(coords, placeGuess)}
+              highlightedPinId={highlightedPinId}
+              onSelectHangoutChannel={(channelId) => {
+                if (channelId) {
+                  handleOpenChannelInRuang(channelId);
+                } else {
+                  setWorld('ruang');
+                  setMobileRuangView('thread');
+                }
+              }}
+              onNotify={notify}
+            />
+          </div>
+        )}
+      </div>
 
-      {(effectiveFullMap || (!isMobileViewport && splitMapOpen) || (isMobileViewport && mobileTab === 'map')) && (
-        <SocialMapPanel
-          theme={theme}
-          onRequestPinAt={(coords, placeGuess) =>
-            setHangoutModal({ open: true, coords, placeName: placeGuess })
-          }
-          highlightedPinId={highlightedPinId}
-          onCloseDrawer={
-            !effectiveFullMap && !isMobileViewport ? () => setSplitMapOpen(false) : undefined
-          }
-          onSelectHangoutChannel={() => {
-            setFullMapMode(false);
-            setVoiceStageOpen(false);
-            setMobileTab('chat');
-            setMobileChatView('thread');
-          }}
+      {/* Persistent Floating Voice Island (Dynamic Island style across Pulse, Ruang, Peta!) */}
+      {activeVoice && !voiceStageOpen && (
+        <VoiceIsland
+          onOpenStage={() => setVoiceStageOpen(true)}
           onNotify={notify}
         />
       )}
 
-      {/* Mobile Tab 4: Inline Profile & Settings Pane */}
-      {isMobileViewport && mobileTab === 'profile' && (
-        <ProfileSettingsModal
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          cloudBackend={cloudBackend}
-          inline
-          onNotify={notify}
+      {/* Mobile Floating Capsule Dock (3 Worlds + Detached Terracotta + FAB) */}
+      {!hideMobileDock && (
+        <MobileCapsuleDock
+          world={world}
+          unreadCount={totalUnread}
+          onChangeWorld={handleChangeWorld}
+          onOpenHangoutModal={() => handleOpenHangout()}
+          onOpenQuickSnap={() => setQuickSnapOpen(true)}
         />
       )}
 
-      {/* Mobile Floating Compact Voice Pill above Bottom Bar */}
-      {activeVoice && (
-        <div
-          className="mobile-voice-pill"
-          role="status"
-          onClick={() => {
-            setVoiceStageOpen(true);
-            setMobileTab('chat');
-            setMobileChatView('thread');
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-            <Volume2 size={15} strokeWidth={2} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {activeVoice.name}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              style={{ color: '#ffffff' }}
-              onClick={async () => {
-                const next = !isMuted;
-                toggleMute();
-                await zonaVoiceEngine.setMuted(next);
-              }}
-              aria-label={isMuted ? 'Aktifkan mikrofon' : 'Bisukan mikrofon'}
-            >
-              {isMuted ? <MicOff size={16} strokeWidth={2} /> : <Mic size={16} strokeWidth={2} />}
-            </button>
-            <button
-              type="button"
-              style={{ color: '#ffffff' }}
-              onClick={async () => {
-                await zonaVoiceEngine.disconnect();
-                leaveVoiceLounge();
-              }}
-              aria-label="Keluar ruang suara"
-            >
-              <PhoneOff size={16} strokeWidth={2} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Native 4-Tab Bottom Bar */}
-      <nav className="mobile-bottom-nav" aria-label="Navigasi Utama">
-        <button
-          type="button"
-          className={`mobile-nav-btn ${mobileTab === 'chat' ? 'active' : ''}`}
-          onClick={() => {
-            setVoiceStageOpen(false);
-            setMobileTab('chat');
-            setMobileChatView('list');
-          }}
-        >
-          <MessageCircle size={20} strokeWidth={1.75} />
-          <span>Chat</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${mobileTab === 'circles' ? 'active' : ''}`}
-          onClick={() => {
-            setVoiceStageOpen(false);
-            setMobileTab('circles');
-          }}
-        >
-          <Users size={20} strokeWidth={1.75} />
-          <span>Circles</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${mobileTab === 'map' ? 'active' : ''}`}
-          onClick={() => {
-            setVoiceStageOpen(false);
-            setMobileTab('map');
-          }}
-        >
-          <Map size={20} strokeWidth={1.75} />
-          <span>Map</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${mobileTab === 'profile' ? 'active' : ''}`}
-          onClick={() => {
-            setVoiceStageOpen(false);
-            setMobileTab('profile');
-          }}
-        >
-          <User size={20} strokeWidth={1.75} />
-          <span>Profil</span>
-        </button>
-      </nav>
-
+      {/* Modals */}
       {storyState && (
         <StoryViewerModal
           stories={storyState.stories}
           initialIndex={storyState.index}
           onClose={() => setStoryState(null)}
           onNotify={notify}
+        />
+      )}
+
+      {quickSnapOpen && (
+        <QuickSnapModal
+          onClose={() => setQuickSnapOpen(false)}
+          onSend={({ caption, viewOnce, mediaUrl }) => {
+            const targetChannel =
+              channels.find((c) => c.id === 'ch-kampus-media') ??
+              channels.find((c) => c.circleId === (activeCircleId ?? circles[0]?.id)) ??
+              channels[0];
+            if (!targetChannel) return;
+            const snapMsg = sendQuickSnap(targetChannel.id, caption, viewOnce, mediaUrl);
+            void zonaCloudSync.syncSendMessage(snapMsg);
+            notify('Momen 24 jam dibagikan!');
+          }}
         />
       )}
 
@@ -534,12 +428,10 @@ export function App() {
             void zonaCloudSync.syncCreateHangoutPin(pin, channel);
             setHangoutModal((m) => ({ ...m, open: false }));
             setHighlightedPinId(pin.id);
-            setFullMapMode(false);
             setVoiceStageOpen(false);
-            setSplitMapOpen(true);
-            setMobileTab('chat');
-            setMobileChatView('thread');
-            notify(`Pin "${placeName}" dan kanalnya telah dibuat.`);
+            setWorld('ruang');
+            setMobileRuangView('thread');
+            notify(`Pin "${placeName}" dan topik kumpulnya telah dibuat.`);
           }}
         />
       )}

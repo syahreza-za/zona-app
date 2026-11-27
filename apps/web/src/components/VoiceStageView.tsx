@@ -99,7 +99,7 @@ export function VoiceStageView({ onCloseStage, onNotify }: VoiceStageViewProps) 
           </button>
           <div>
             <h1 className="chat-header-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <Headphones size={17} strokeWidth={1.75} color="var(--accent)" />
+              <Headphones size={17} strokeWidth={1.75} color="var(--live)" />
               <span>{lounge.name}</span>
             </h1>
             <p className="chat-header-sub">
@@ -149,7 +149,7 @@ export function VoiceStageView({ onCloseStage, onNotify }: VoiceStageViewProps) 
                   {p.displayName} {isMe ? '(Kamu)' : ''}
                 </span>
                 {speaking ? (
-                  <span className="voice-eq" aria-label="Sedang berbicara">
+                  <span className="voice-eq live" aria-label="Sedang berbicara">
                     <span />
                     <span />
                     <span />
