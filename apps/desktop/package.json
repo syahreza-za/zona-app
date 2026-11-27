@@ -4,6 +4,7 @@
   "private": true,
   "description": "Tauri v2 native desktop shell for ZONA (macOS .dmg & Windows .exe/.msi)",
   "scripts": {
+    "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
     "typecheck": "echo 'Tauri desktop shell uses Rust (cargo check in src-tauri)'"

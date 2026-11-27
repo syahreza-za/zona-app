@@ -70,6 +70,7 @@ jobs:
           VITE_LIVEKIT_URL: ${{ secrets.VITE_LIVEKIT_URL }}
         with:
           projectPath: apps/desktop
+          tauriScript: pnpm tauri
           args: ${{ matrix.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && format('ZONA {0}', github.ref_name) || '' }}
