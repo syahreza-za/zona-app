@@ -9,7 +9,6 @@ import {
   Copy,
   ExternalLink,
   Flag,
-  Headphones,
   Info,
   Link2,
   Map as MapIcon,
@@ -515,11 +514,10 @@ export function ChatPanel({
                   activeVoiceLoungeId === circleVoiceLounge.id ? 'active' : ''
                 }`}
                 onClick={() => void handleCircleVoiceClick()}
-                title={`Ruang Suara: ${circleVoiceLounge.name}`}
+                title={`Suara: ${circleVoiceLounge.name}`}
               >
-                <Headphones size={14} strokeWidth={2} />
+                <span className="lamp-dot xs" aria-hidden="true" />
                 <span className="desktop-only">{circleVoiceLounge.name}</span>
-                <span className="header-voice-count">{circleVoiceLounge.participantIds.length}</span>
               </button>
             )}
 
@@ -528,10 +526,10 @@ export function ChatPanel({
                 type="button"
                 className="icon-btn desktop-only"
                 onClick={() => void handleCopyCircleInvite()}
-                title="Salin tautan undangan Circle"
+                title="Salin tautan undangan"
                 aria-label="Salin undangan Circle"
               >
-                <Link2 size={17} strokeWidth={1.85} />
+                <Link2 size={16} strokeWidth={1.8} />
               </button>
             )}
 
@@ -545,7 +543,7 @@ export function ChatPanel({
               title="Cari pesan"
               aria-label="Cari pesan"
             >
-              <Search size={17} strokeWidth={1.85} />
+              <Search size={16} strokeWidth={1.8} />
             </button>
 
             <button
@@ -555,12 +553,12 @@ export function ChatPanel({
               title="Info obrolan"
               aria-label="Info obrolan"
             >
-              <Info size={17} strokeWidth={1.85} />
+              <Info size={16} strokeWidth={1.8} />
             </button>
           </div>
         </header>
 
-        {/* Horizontal Topic Pill Bar (Original ZONA Innovation replacing vertical #channel list!) */}
+        {/* Horizontal Topic Text Tabs (Clean Underline — Zero Fat Pills!) */}
         {activeCircle && (
           <div className="topic-pill-bar" role="tablist" aria-label={`Topik ${activeCircle.name}`}>
             {circleTopics.map((topic) => {
@@ -572,15 +570,12 @@ export function ChatPanel({
                   type="button"
                   role="tab"
                   aria-selected={selected}
-                  className={`topic-pill ${selected ? 'active' : ''} ${
-                    topic.type === 'hangout' ? 'hangout' : ''
-                  }`}
+                  className={`topic-pill ${selected ? 'active' : ''}`}
                   onClick={() => selectChannel(topic.id)}
                 >
-                  {topic.type === 'hangout' && <MapPin size={13} strokeWidth={2} />}
                   <span>{formatTopicLabel(topic.name)}</span>
                   {topic.unreadCount > 0 && !selected && (
-                    <span className="topic-pill-unread">{topic.unreadCount}</span>
+                    <span className="lamp-dot xs" aria-label={`${topic.unreadCount} belum dibaca`} />
                   )}
                 </button>
               );
@@ -623,7 +618,7 @@ export function ChatPanel({
                 className="topic-pill add"
                 onClick={() => setAddingTopic(true)}
               >
-                <Plus size={13} strokeWidth={2.2} />
+                <Plus size={13} strokeWidth={2} />
                 <span>Topik</span>
               </button>
             )}
@@ -989,7 +984,6 @@ export function ChatPanel({
                       </div>
                     ) : msg.type === 'hangout_card' && pin ? (() => {
                       const cat = HANGOUT_CATEGORY_META[pin.category ?? 'coffee'];
-                      const CatIcon = cat.icon;
                       const distLabel = myLoc
                         ? `${formatDistanceLabel(distanceMeters(myLoc.point, pin.point))} · ~${estimateEtaMinutes(myLoc.point, pin.point)} mnt`
                         : 'Sekitar lokasi';
@@ -997,7 +991,7 @@ export function ChatPanel({
 
                       return (
                         <div className="hangout-inline-card">
-                          {/* Real 3D Cartographic Mini-Map Preview */}
+                          {/* Clean Mini-Map Preview */}
                           <div
                             className="hangout-minimap"
                             onClick={() => onFocusMapPin?.(pin.id)}
@@ -1016,29 +1010,6 @@ export function ChatPanel({
                               alt={`Peta lokasi ${pin.placeName}`}
                               className="hangout-minimap-img"
                             />
-                            <div className="hangout-minimap-scrim" aria-hidden="true" />
-
-                            <span
-                              className="minimap-cat-badge"
-                              style={{ background: cat.color }}
-                            >
-                              <CatIcon size={11} strokeWidth={2} />
-                              <span>{cat.label}</span>
-                            </span>
-
-                            <div className="minimap-center-pin">
-                              <span
-                                className="minimap-pin-pulse"
-                                style={{ background: `${cat.color}40` }}
-                              />
-                              <span
-                                className="minimap-pin-core"
-                                style={{ background: cat.color }}
-                              >
-                                <MapPin size={13} strokeWidth={2.2} color="#FFFFFF" />
-                              </span>
-                            </div>
-
                             <span className="minimap-eta-badge">{distLabel}</span>
                           </div>
 

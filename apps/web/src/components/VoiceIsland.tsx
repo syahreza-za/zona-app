@@ -1,5 +1,4 @@
 import {
-  Headphones,
   Maximize2,
   Mic,
   MicOff,
@@ -8,7 +7,6 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { useZonaStore } from '@zona/shared';
-import { Avatar } from './Avatar';
 import { zonaVoiceEngine } from '../services/livekitVoice';
 
 interface VoiceIslandProps {
@@ -18,8 +16,6 @@ interface VoiceIslandProps {
 
 export function VoiceIsland({ onOpenStage, onNotify }: VoiceIslandProps) {
   const {
-    currentUserId,
-    profiles,
     voiceLounges,
     activeVoiceLoungeId,
     isMuted,
@@ -31,8 +27,6 @@ export function VoiceIsland({ onOpenStage, onNotify }: VoiceIslandProps) {
 
   const activeVoice = voiceLounges.find((v) => v.id === activeVoiceLoungeId);
   if (!activeVoice) return null;
-
-  const isLivekit = zonaVoiceEngine.getConnectionMode() === 'livekit';
 
   const handleToggleMute = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -60,47 +54,14 @@ export function VoiceIsland({ onOpenStage, onNotify }: VoiceIslandProps) {
       id="zona-voice-island"
       className="voice-island"
       role="region"
-      aria-label={`Ruang suara aktif: ${activeVoice.name}`}
+      aria-label={`Suara aktif: ${activeVoice.name}`}
       onClick={onOpenStage}
     >
       <div className="voice-island-info">
-        <div className="voice-island-avatars">
-          {activeVoice.participantIds.slice(0, 3).map((uid) => {
-            const p = profiles[uid];
-            if (!p) return null;
-            const speaking =
-              activeVoice.speakingUserIds.includes(uid) && !(uid === currentUserId && isMuted);
-            return (
-              <span
-                key={uid}
-                className={`voice-island-avatar-ring ${speaking ? 'speaking' : ''}`}
-              >
-                <Avatar
-                  initials={p.initials}
-                  color={p.avatarColor}
-                  variant={p.avatarVariant}
-                  seed={uid}
-                  avatarUrl={p.avatarUrl}
-                  size="xs"
-                />
-              </span>
-            );
-          })}
-        </div>
-
+        <span className="lamp-dot" aria-hidden="true" />
         <div className="voice-island-meta">
-          <div className="voice-island-title-row">
-            <Headphones size={12} strokeWidth={2.2} color="var(--live)" />
-            <strong className="voice-island-name">{activeVoice.name}</strong>
-            <span className="voice-eq sm live" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          </div>
-          <span className="voice-island-sub">
-            {isLivekit ? 'LiveKit HD' : 'Suara Aktif'} · {activeVoice.participantIds.length} peserta
-          </span>
+          <strong className="voice-island-name">{activeVoice.name}</strong>
+          <span className="voice-island-sub">{activeVoice.participantIds.length} orang</span>
         </div>
       </div>
 
@@ -112,7 +73,7 @@ export function VoiceIsland({ onOpenStage, onNotify }: VoiceIslandProps) {
           title={isMuted ? 'Aktifkan mikrofon' : 'Bisukan mikrofon'}
           aria-label={isMuted ? 'Aktifkan mikrofon' : 'Bisukan mikrofon'}
         >
-          {isMuted ? <MicOff size={15} strokeWidth={2} /> : <Mic size={15} strokeWidth={2} />}
+          {isMuted ? <MicOff size={14} strokeWidth={1.9} /> : <Mic size={14} strokeWidth={1.9} />}
         </button>
 
         <button
@@ -123,9 +84,9 @@ export function VoiceIsland({ onOpenStage, onNotify }: VoiceIslandProps) {
           aria-label={isDeafened ? 'Aktifkan speaker' : 'Deafen'}
         >
           {isDeafened ? (
-            <VolumeX size={15} strokeWidth={2} />
+            <VolumeX size={14} strokeWidth={1.9} />
           ) : (
-            <Volume2 size={15} strokeWidth={2} />
+            <Volume2 size={14} strokeWidth={1.9} />
           )}
         </button>
 
@@ -134,20 +95,20 @@ export function VoiceIsland({ onOpenStage, onNotify }: VoiceIslandProps) {
           type="button"
           className="voice-island-btn"
           onClick={onOpenStage}
-          title="Buka Voice Stage"
-          aria-label="Buka Voice Stage"
+          title="Buka Stage"
+          aria-label="Buka Stage"
         >
-          <Maximize2 size={14} strokeWidth={2} />
+          <Maximize2 size={13} strokeWidth={1.9} />
         </button>
 
         <button
           type="button"
           className="voice-island-btn leave"
           onClick={handleLeave}
-          title="Keluar ruang suara"
-          aria-label="Keluar ruang suara"
+          title="Keluar suara"
+          aria-label="Keluar suara"
         >
-          <PhoneOff size={15} strokeWidth={2} />
+          <PhoneOff size={14} strokeWidth={1.9} />
         </button>
       </div>
     </aside>

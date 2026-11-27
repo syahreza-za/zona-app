@@ -410,29 +410,15 @@ export function SocialMapPanel({
       markersRef.current.push(marker);
     });
 
-    // 3. Categorized Hangout Pins with monochrome SVG icons
-    const categoryIconSvg: Record<HangoutCategory, string> = {
-      coffee:
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>',
-      food:
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>',
-      gaming:
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/></svg>',
-      sport:
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>',
-    };
+    // 3. Minimalist Monochrome Hangout Pins with Indicator Lamp Dot
 
     hangoutPins.forEach((pin) => {
-      const catKey = pin.category ?? 'coffee';
-      const cat = HANGOUT_CATEGORY_META[catKey];
       const el = document.createElement('button');
       el.type = 'button';
       el.className = `hangout-pin-pill ${highlightedPinId === pin.id ? 'highlighted' : ''}`;
       el.style.position = 'static';
       el.style.transform = 'none';
-      el.style.background = cat.color;
-      el.style.boxShadow = `0 6px 18px ${cat.color}55`;
-      el.innerHTML = `${categoryIconSvg[catKey]}<span>${pin.placeName.replace(/</g, '&lt;')}</span>`;
+      el.innerHTML = `<span class="pin-lamp-dot"></span><span>${pin.placeName.replace(/</g, '&lt;')}</span>`;
       el.onclick = (e) => {
         e.stopPropagation();
         selectChannel(pin.channelId);
@@ -444,7 +430,7 @@ export function SocialMapPanel({
       markersRef.current.push(marker);
     });
 
-    // Fit camera cleanly so no marker collides with top bar, right FABs, or bottom sheet
+    // Fit camera cleanly so no marker collides with controls
     const fitAllMarkers = () => {
       const allCoords: Coordinates[] = [
         ...clusters.map((c) => c.point),
@@ -457,12 +443,12 @@ export function SocialMapPanel({
       const isNarrow = width < 560;
       map.fitBounds(bounds, {
         padding: isHero
-          ? { top: 108, bottom: 92, left: 64, right: 64 }
+          ? { top: 82, bottom: 48, left: 56, right: 56 }
           : isNarrow
-            ? { top: 155, bottom: 235, left: 64, right: 74 }
-            : { top: 125, bottom: 185, left: 96, right: 116 },
-        maxZoom: isHero ? 12.9 : isNarrow ? 13.2 : 13.8,
-        pitch: 24,
+            ? { top: 145, bottom: 230, left: 60, right: 70 }
+            : { top: 110, bottom: 180, left: 90, right: 100 },
+        maxZoom: isHero ? 13.1 : isNarrow ? 13.2 : 13.8,
+        pitch: 20,
         bearing: 0,
         duration: 0,
       });
@@ -673,89 +659,46 @@ export function SocialMapPanel({
       )}
 
       {isHero ? (
-        <>
-          {/* Hero Mode Top Bar: Status badge + Privacy Switcher + Expand Map CTA */}
-          <div className="hero-map-top">
-            <div className="hero-map-live-pill">
-              <span className="live-indicator-dot" aria-hidden="true" />
-              <span>{visibleFriends.length} teman aktif di peta</span>
-            </div>
-
-            <div className="hero-map-top-right">
-              <div className="map-privacy-pill compact" role="group" aria-label="Privasi Lokasi">
-                {(
-                  [
-                    { mode: 'exact', label: 'Tepat', icon: Eye },
-                    { mode: 'fuzzy', label: 'Area', icon: Shield },
-                    { mode: 'ghost', label: 'Ghost', icon: EyeOff },
-                  ] as { mode: PrivacyMode; label: string; icon: typeof Eye }[]
-                ).map(({ mode, label, icon: Icon }) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={`map-privacy-opt ${myPrivacy === mode ? `active ${mode}` : ''}`}
-                    onClick={() => {
-                      setMyPrivacyMode(mode);
-                      void zonaCloudSync.syncLocation({ privacyMode: mode });
-                      onNotify(`Privasi lokasi: ${label}`);
-                    }}
-                    title={`Mode ${label}`}
-                  >
-                    <Icon size={12} strokeWidth={1.9} />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {onExpandHeroMap && (
-                <button
-                  id="btn-hero-expand-map"
-                  type="button"
-                  className="hero-expand-btn"
-                  onClick={onExpandHeroMap}
-                >
-                  <Maximize2 size={13} strokeWidth={2} />
-                  <span>Perbesar Peta</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Hero Mode Bottom Floating Active Friends Strip */}
-          <div className="hero-map-bottom-strip">
-            {visibleFriends.map(({ userId, loc, profile }) => (
+        <div className="hero-map-top">
+          <div className="map-privacy-pill slim" role="group" aria-label="Privasi Lokasi">
+            {(
+              [
+                { mode: 'exact', label: 'Tepat' },
+                { mode: 'fuzzy', label: 'Area' },
+                { mode: 'ghost', label: 'Mati' },
+              ] as { mode: PrivacyMode; label: string }[]
+            ).map(({ mode, label }) => (
               <button
-                key={userId}
+                key={mode}
                 type="button"
-                className="hero-friend-chip"
+                className={`map-privacy-opt ${myPrivacy === mode ? `active ${mode}` : ''}`}
                 onClick={() => {
-                  setSelectedMapUser(userId);
-                  mapRef.current?.flyTo({
-                    center: [loc.point.lng, loc.point.lat],
-                    zoom: 14.8,
-                    pitch: 24,
-                    bearing: 0,
-                  });
+                  setMyPrivacyMode(mode);
+                  void zonaCloudSync.syncLocation({ privacyMode: mode });
+                  onNotify(`Lokasi: ${label}`);
                 }}
               >
-                <Avatar
-                  initials={profile.initials}
-                  color={profile.avatarColor}
-                  variant={profile.avatarVariant}
-                  seed={userId}
-                  avatarUrl={profile.avatarUrl}
-                  size="xs"
-                  online={profile.isOnline}
-                  showPresence
-                />
-                <div className="hero-friend-copy">
-                  <strong>{profile.displayName}</strong>
-                  <span>{loc.areaLabel}</span>
-                </div>
+                {myPrivacy === mode && mode !== 'ghost' && (
+                  <span className="lamp-dot xs" aria-hidden="true" />
+                )}
+                <span>{label}</span>
               </button>
             ))}
           </div>
-        </>
+
+          {onExpandHeroMap && (
+            <button
+              id="btn-hero-expand-map"
+              type="button"
+              className="hero-expand-icon-btn"
+              onClick={onExpandHeroMap}
+              title="Buka peta penuh"
+              aria-label="Buka peta penuh"
+            >
+              <Maximize2 size={15} strokeWidth={1.85} />
+            </button>
+          )}
+        </div>
       ) : (
         <>
           {/* Full Map Floating Top Glass Controls */}
@@ -832,7 +775,7 @@ export function SocialMapPanel({
                   [
                     { mode: 'exact', label: 'Tepat', icon: Eye },
                     { mode: 'fuzzy', label: 'Area', icon: Shield },
-                    { mode: 'ghost', label: 'Ghost', icon: EyeOff },
+                    { mode: 'ghost', label: 'Mati', icon: EyeOff },
                   ] as { mode: PrivacyMode; label: string; icon: typeof Eye }[]
                 ).map(({ mode, label, icon: Icon }) => (
                   <button

@@ -226,7 +226,7 @@ export function App() {
     }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#111012' : '#F7F5F0');
+      meta.setAttribute('content', theme === 'dark' ? '#0A0A0A' : '#FFFFFF');
     }
   }, [theme]);
 

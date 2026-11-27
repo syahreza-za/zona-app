@@ -51,13 +51,8 @@ export function MobileCapsuleDock({
               onOpenHangoutModal();
             }}
           >
-            <span className="mobile-fab-icon terracotta">
-              <MapPin size={16} strokeWidth={2} />
-            </span>
-            <div>
-              <strong>Pin Ajak Kumpul</strong>
-              <span>Tandai lokasi & buat ruang otomatis</span>
-            </div>
+            <MapPin size={16} strokeWidth={1.9} />
+            <span>Buat Pin Kumpul</span>
           </button>
 
           <button
@@ -68,13 +63,8 @@ export function MobileCapsuleDock({
               onOpenQuickSnap();
             }}
           >
-            <span className="mobile-fab-icon teal">
-              <Camera size={16} strokeWidth={2} />
-            </span>
-            <div>
-              <strong>Bagikan Momen</strong>
-              <span>Quick Snap foto 24 jam ke teman</span>
-            </div>
+            <Camera size={16} strokeWidth={1.9} />
+            <span>Unggah Momen</span>
           </button>
         </div>
       )}
@@ -90,7 +80,7 @@ export function MobileCapsuleDock({
               onChangeWorld('pulse');
             }}
           >
-            <Compass size={19} strokeWidth={world === 'pulse' ? 2.1 : 1.75} />
+            <Compass size={18} strokeWidth={world === 'pulse' ? 2 : 1.7} />
             <span>Pulse</span>
           </button>
 
@@ -104,7 +94,7 @@ export function MobileCapsuleDock({
             }}
           >
             <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <MessageSquare size={19} strokeWidth={world === 'ruang' ? 2.1 : 1.75} />
+              <MessageSquare size={18} strokeWidth={world === 'ruang' ? 2 : 1.7} />
               {unreadCount > 0 && <span className="mobile-capsule-dot" />}
             </span>
             <span>Ruang</span>
@@ -119,7 +109,7 @@ export function MobileCapsuleDock({
               onChangeWorld('peta');
             }}
           >
-            <MapIcon size={19} strokeWidth={world === 'peta' ? 2.1 : 1.75} />
+            <MapIcon size={18} strokeWidth={world === 'peta' ? 2 : 1.7} />
             <span>Peta</span>
           </button>
         </nav>
@@ -129,10 +119,10 @@ export function MobileCapsuleDock({
           type="button"
           className={`mobile-capsule-fab ${fabMenuOpen ? 'open' : ''}`}
           onClick={() => setFabMenuOpen((v) => !v)}
-          aria-label="Buat Pin Kumpul atau Quick Snap"
+          aria-label="Buat Pin atau Momen"
           aria-expanded={fabMenuOpen}
         >
-          {fabMenuOpen ? <X size={21} strokeWidth={2.2} /> : <Plus size={22} strokeWidth={2.2} />}
+          {fabMenuOpen ? <X size={19} strokeWidth={2} /> : <Plus size={20} strokeWidth={2} />}
         </button>
       </div>
     </div>

@@ -45,77 +45,77 @@ const mobileCloudBackend = createZonaCloudBackend({
 
 const PALETTES = {
   light: {
-    canvas: '#F7F5F0',
+    canvas: '#FFFFFF',
     panel: '#FFFFFF',
-    input: '#EFECE5',
+    input: '#F5F5F5',
     canvasByTheme: {
-      clean: '#F7F5F0',
-      'warm-sand': '#F3ECE2',
-      'ocean-mist': '#EEF3F4',
-      'midnight-forest': '#EFF2EE',
+      clean: '#FFFFFF',
+      'warm-sand': '#FAFAFA',
+      'ocean-mist': '#F8F9FA',
+      'midnight-forest': '#F8F8F8',
     } as Record<ChatWallpaperTheme, string>,
-    bubbleIn: '#FFFFFF',
-    bubbleOut: '#1C1917',
-    bubbleOutText: '#FAFAF9',
-    hairline: 'rgba(28, 25, 23, 0.08)',
-    textPrimary: '#1C1917',
-    textSecondary: '#57534E',
-    textMuted: '#A8A29E',
-    accent: '#E05A3F',
-    accentSoft: 'rgba(224, 90, 63, 0.12)',
-    live: '#0D9488',
-    liveSoft: 'rgba(13, 148, 136, 0.13)',
+    bubbleIn: '#F5F5F5',
+    bubbleOut: '#0A0A0A',
+    bubbleOutText: '#FFFFFF',
+    hairline: '#EAEAEA',
+    textPrimary: '#0A0A0A',
+    textSecondary: '#6E6E73',
+    textMuted: '#9A9AA0',
+    accent: '#0A0A0A',
+    accentSoft: '#F5F5F5',
+    live: '#E05A3F',
+    liveSoft: 'rgba(224, 90, 63, 0.1)',
     danger: '#DC2626',
-    mapBg: '#F1EDE3',
-    mapPark: '#D2E6CE',
-    mapWater: '#B4D6EA',
+    mapBg: '#F5F5F5',
+    mapPark: '#E2ECE0',
+    mapWater: '#D6E6F2',
     glass: 'rgba(255, 255, 255, 0.94)',
-    capsuleActiveBg: '#1C1917',
-    capsuleActiveText: '#FAFAF9',
+    capsuleActiveBg: '#0A0A0A',
+    capsuleActiveText: '#FFFFFF',
   },
   dark: {
-    canvas: '#111012',
-    panel: '#19181C',
-    input: '#242228',
+    canvas: '#0A0A0A',
+    panel: '#0A0A0A',
+    input: '#161616',
     canvasByTheme: {
-      clean: '#141316',
-      'warm-sand': '#1B1715',
-      'ocean-mist': '#13191D',
-      'midnight-forest': '#141917',
+      clean: '#0A0A0A',
+      'warm-sand': '#0D0D0D',
+      'ocean-mist': '#0B0D0E',
+      'midnight-forest': '#0B0C0B',
     } as Record<ChatWallpaperTheme, string>,
-    bubbleIn: '#222027',
-    bubbleOut: '#E05A3F',
-    bubbleOutText: '#FAF5F0',
-    hairline: 'rgba(245, 243, 239, 0.08)',
-    textPrimary: '#F5F3EF',
-    textSecondary: '#A8A29E',
-    textMuted: '#716D69',
-    accent: '#E05A3F',
-    accentSoft: 'rgba(224, 90, 63, 0.2)',
-    live: '#14B8A6',
-    liveSoft: 'rgba(20, 184, 166, 0.18)',
+    bubbleIn: '#1A1A1A',
+    bubbleOut: '#F5F5F5',
+    bubbleOutText: '#0A0A0A',
+    hairline: '#222222',
+    textPrimary: '#F5F5F5',
+    textSecondary: '#8E8E93',
+    textMuted: '#5C5C60',
+    accent: '#FFFFFF',
+    accentSoft: '#161616',
+    live: '#FF5A36',
+    liveSoft: 'rgba(255, 90, 54, 0.14)',
     danger: '#F87171',
-    mapBg: '#141720',
-    mapPark: '#172924',
-    mapWater: '#0F1826',
-    glass: 'rgba(25, 24, 28, 0.94)',
-    capsuleActiveBg: '#F5F3EF',
-    capsuleActiveText: '#1C1917',
+    mapBg: '#121212',
+    mapPark: '#17221B',
+    mapWater: '#121922',
+    glass: 'rgba(18, 18, 18, 0.94)',
+    capsuleActiveBg: '#FFFFFF',
+    capsuleActiveText: '#0A0A0A',
   },
 };
 
 const CATEGORY_COLORS: Record<HangoutCategory, string> = {
-  coffee: '#C2410C',
-  food: '#E05A3F',
-  gaming: '#0F766E',
-  sport: '#0D9488',
+  coffee: '#0A0A0A',
+  food: '#0A0A0A',
+  gaming: '#0A0A0A',
+  sport: '#0A0A0A',
 };
 
 const CHAT_THEMES: Array<{ id: ChatWallpaperTheme; label: string }> = [
-  { id: 'clean', label: 'Warm Alabaster' },
-  { id: 'warm-sand', label: 'Linen Paper' },
-  { id: 'ocean-mist', label: 'Coastal Fog' },
-  { id: 'midnight-forest', label: 'Sage Stone' },
+  { id: 'clean', label: 'Murni' },
+  { id: 'warm-sand', label: 'Halus' },
+  { id: 'ocean-mist', label: 'Sejuk' },
+  { id: 'midnight-forest', label: 'Netral' },
 ];
 
 function formatTime(iso: string): string {
@@ -644,24 +644,24 @@ export default function App() {
             </View>
           </View>
 
-          {/* 3:4 Quick Snap Moments Strip */}
-          <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+          {/* 3:4 Quick Snap Moments Strip (Flat Section) */}
+          <View style={[styles.bentoCard, { borderColor: c.hairline }]}>
             <View style={styles.rowBetween}>
-              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Momen 24 Jam</Text>
+              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Momen</Text>
               <TouchableOpacity onPress={() => void handlePickQuickSnap()}>
-                <Text style={{ color: c.accent, fontSize: 12.5, fontWeight: '600' }}>+ Bagikan</Text>
+                <Text style={{ color: c.textSecondary, fontSize: 12.5, fontWeight: '500' }}>+ Unggah</Text>
               </TouchableOpacity>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 10 }}>
               <TouchableOpacity
-                style={[styles.momentCardCreate, { backgroundColor: c.input, borderColor: c.hairline }]}
+                style={[styles.momentCardCreate, { backgroundColor: c.canvas, borderColor: c.hairline }]}
                 onPress={() => void handlePickQuickSnap()}
               >
-                <View style={[styles.momentPlusBadge, { backgroundColor: c.accent }]}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>+</Text>
+                <View style={[styles.momentPlusBadge, { backgroundColor: c.capsuleActiveBg }]}>
+                  <Text style={{ color: c.capsuleActiveText, fontSize: 18, fontWeight: '600' }}>+</Text>
                 </View>
-                <Text style={{ color: c.textPrimary, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
-                  Bagikan Momen
+                <Text style={{ color: c.textSecondary, fontSize: 12, fontWeight: '500', textAlign: 'center' }}>
+                  Bagikan
                 </Text>
               </TouchableOpacity>
 
@@ -680,7 +680,7 @@ export default function App() {
                   >
                     <Text style={styles.momentAuthor}>{author.displayName}</Text>
                     <Text style={styles.momentCaption} numberOfLines={2}>
-                      {snap.snapCaption || 'Quick Snap 24j'}
+                      {snap.snapCaption || 'Momen'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -688,45 +688,41 @@ export default function App() {
             </ScrollView>
           </View>
 
-          {/* Live Audio Lounge Cards */}
-          <View style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}>
+          {/* Suara (Flat Section) */}
+          <View style={[styles.bentoCard, { borderColor: c.hairline }]}>
             <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: 8 }]}>
-              Ruang Suara Hidup
+              Suara
             </Text>
             {visibleVoiceLounges.map((vl) => {
               const joined = activeVoiceLoungeId === vl.id;
               return (
                 <View
                   key={vl.id}
-                  style={[
-                    styles.voiceCard,
-                    {
-                      backgroundColor: joined ? c.liveSoft : c.canvas,
-                      borderColor: joined ? c.live : c.hairline,
-                    },
-                  ]}
+                  style={[styles.voiceCard, { borderColor: c.hairline }]}
                 >
+                  <View style={[styles.liveDot, { backgroundColor: c.live }]} />
                   <View style={styles.flex1}>
                     <Text style={[styles.rowTitle, { color: c.textPrimary }]}>{vl.name}</Text>
-                    <Text style={[styles.meta, { color: c.textSecondary }]}>
-                      {vl.participantIds.length} peserta · {vl.topic}
-                    </Text>
                   </View>
                   <TouchableOpacity
                     style={[
                       styles.actionPill,
-                      { backgroundColor: joined ? c.danger : c.capsuleActiveBg },
+                      {
+                        backgroundColor: joined ? c.capsuleActiveBg : 'transparent',
+                        borderWidth: 1,
+                        borderColor: joined ? c.capsuleActiveBg : c.hairline,
+                      },
                     ]}
                     onPress={() => (joined ? leaveVoiceLounge() : joinVoiceLounge(vl.id))}
                   >
                     <Text
                       style={{
-                        color: joined ? '#FFFFFF' : c.capsuleActiveText,
+                        color: joined ? c.capsuleActiveText : c.textPrimary,
                         fontSize: 12.5,
                         fontWeight: '600',
                       }}
                     >
-                      {joined ? 'Keluar' : 'Gabung Suara'}
+                      {joined ? 'Keluar' : 'Masuk'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -734,18 +730,18 @@ export default function App() {
             })}
           </View>
 
-          {/* Agenda Kumpul RSVP Card */}
+          {/* Kumpul (Flat Section with ON/OFF RSVP) */}
           {visibleHangouts.slice(0, 1).map((pin) => {
             const myRsvp = pin.rsvps.find((r) => r.userId === currentUserId);
             return (
               <View
                 key={pin.id}
-                style={[styles.bentoCard, { backgroundColor: c.panel, borderColor: c.hairline }]}
+                style={[styles.bentoCard, { borderColor: c.hairline }]}
               >
                 <View style={styles.rowBetween}>
-                  <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Agenda Kumpul</Text>
-                  <Text style={[styles.meta, { color: c.accent, fontWeight: '600' }]}>
-                    {pin.startsAtLabel}
+                  <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Kumpul</Text>
+                  <Text style={[styles.meta, { color: c.textSecondary }]}>
+                    {pin.startsAtLabel.replace('Hari ini · ', '')}
                   </Text>
                 </View>
                 <Text style={[styles.rowTitle, { color: c.textPrimary, marginTop: 6 }]}>
@@ -763,7 +759,9 @@ export default function App() {
                         style={[
                           styles.rsvpBtn,
                           {
-                            backgroundColor: selected ? c.accent : c.input,
+                            backgroundColor: selected ? c.capsuleActiveBg : 'transparent',
+                            borderWidth: 1,
+                            borderColor: selected ? c.capsuleActiveBg : c.hairline,
                           },
                         ]}
                         onPress={() => {
@@ -777,7 +775,7 @@ export default function App() {
                       >
                         <Text
                           style={{
-                            color: selected ? '#FFFFFF' : c.textPrimary,
+                            color: selected ? c.capsuleActiveText : c.textSecondary,
                             fontSize: 12.5,
                             fontWeight: '600',
                           }}
@@ -1041,10 +1039,10 @@ export default function App() {
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: c.accent }]}
+              style={[styles.sendBtn, { backgroundColor: c.capsuleActiveBg }]}
               onPress={handleSend}
             >
-              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>Kirim</Text>
+              <Text style={{ color: c.capsuleActiveText, fontWeight: '600', fontSize: 13 }}>Kirim</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1060,7 +1058,7 @@ export default function App() {
                   key={mode}
                   style={[
                     styles.privacyPillBtn,
-                    { backgroundColor: myPrivacy === mode ? c.accent : 'transparent' },
+                    { backgroundColor: myPrivacy === mode ? c.capsuleActiveBg : 'transparent' },
                   ]}
                   onPress={() => {
                     setMyPrivacyMode(mode);
@@ -1080,12 +1078,12 @@ export default function App() {
                 >
                   <Text
                     style={{
-                      color: myPrivacy === mode ? '#FFFFFF' : c.textSecondary,
+                      color: myPrivacy === mode ? c.capsuleActiveText : c.textSecondary,
                       fontWeight: '600',
                       fontSize: 12,
                     }}
                   >
-                    {mode === 'exact' ? 'Tepat' : mode === 'fuzzy' ? 'Area' : 'Ghost'}
+                    {mode === 'exact' ? 'Tepat' : mode === 'fuzzy' ? 'Area' : 'Mati'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1112,8 +1110,8 @@ export default function App() {
               if (cluster.isCluster) {
                 return (
                   <View key={cluster.id} style={[styles.mapMarker, { top, left }]}>
-                    <View style={[styles.clusterBadge, { backgroundColor: c.accent }]}>
-                      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>
+                    <View style={[styles.clusterBadge, { backgroundColor: c.capsuleActiveBg }]}>
+                      <Text style={{ color: c.capsuleActiveText, fontWeight: '700', fontSize: 12 }}>
                         +{cluster.items.length}
                       </Text>
                     </View>
@@ -1163,7 +1161,7 @@ export default function App() {
             </TouchableOpacity>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
               <Text style={[styles.rowTitle, { color: c.textPrimary }]}>
-                {visibleFriends.length} teman aktif · {visibleHangouts.length} pin kumpul
+                {visibleFriends.length} teman · {visibleHangouts.length} pin
               </Text>
               {visibleFriends.map(({ userId, loc, profile, coords }) => {
                 const dist =
@@ -1195,18 +1193,16 @@ export default function App() {
 
       {/* Persistent Floating Voice Island (above Floating Capsule Dock!) */}
       {activeVoice && (
-        <View style={[styles.voiceIsland, { bottom: showFloatingDock ? 88 : 68 }]}>
+        <View style={[styles.voiceIsland, { bottom: showFloatingDock ? 88 : 68, backgroundColor: c.capsuleActiveBg }]}>
+          <View style={[styles.liveDot, { backgroundColor: c.live }]} />
           <View style={styles.flex1}>
-            <Text style={{ color: '#FAFAF9', fontWeight: '700', fontSize: 13 }} numberOfLines={1}>
-              {activeVoice.name} · {activeVoice.participantIds.length} peserta
-            </Text>
-            <Text style={{ color: 'rgba(245,243,239,0.7)', fontSize: 11 }}>
-              Ruang Suara Aktif
+            <Text style={{ color: c.capsuleActiveText, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
+              {activeVoice.name}
             </Text>
           </View>
           <TouchableOpacity style={styles.islandBtn} onPress={toggleMute}>
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
-              {isMuted ? 'Buka Mic' : 'Mute'}
+            <Text style={{ color: c.capsuleActiveText, fontSize: 12, fontWeight: '600' }}>
+              {isMuted ? 'Buka' : 'Mute'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1218,7 +1214,7 @@ export default function App() {
         </View>
       )}
 
-      {/* Floating Capsule Bottom Dock (3 Worlds + Terracotta + FAB) */}
+      {/* Floating Capsule Bottom Dock (3 Worlds + Monochrome + FAB) */}
       {showFloatingDock && (
         <View style={styles.dockWrap}>
           <View style={[styles.dockCapsule, { backgroundColor: c.glass, borderColor: c.hairline }]}>
@@ -1245,7 +1241,7 @@ export default function App() {
                   <Text
                     style={{
                       fontSize: 13,
-                      fontWeight: active ? '700' : '500',
+                      fontWeight: active ? '600' : '500',
                       color: active ? c.capsuleActiveText : c.textSecondary,
                     }}
                   >
@@ -1257,10 +1253,10 @@ export default function App() {
           </View>
 
           <TouchableOpacity
-            style={[styles.dockFab, { backgroundColor: c.accent }]}
+            style={[styles.dockFab, { backgroundColor: c.capsuleActiveBg }]}
             onPress={handleFabCreate}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '600', lineHeight: 26 }}>+</Text>
+            <Text style={{ color: c.capsuleActiveText, fontSize: 22, fontWeight: '500', lineHeight: 24 }}>+</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1473,9 +1469,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bentoCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 15,
+    borderBottomWidth: 1,
+    paddingVertical: 16,
   },
   sectionTitle: { fontSize: 15.5, fontWeight: '700' },
   momentCardCreate: {

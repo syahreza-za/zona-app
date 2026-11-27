@@ -2,14 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
-  Compass,
   Link2,
-  Map as MapIcon,
-  MapPin,
-  MessageSquare,
-  Moon,
   Plus,
-  Sun,
   Users,
   WifiOff,
 } from 'lucide-react';
@@ -91,9 +85,11 @@ export function HorizonBar({
     setMenuOpen(false);
   };
 
+  const isLightOn = theme === 'light';
+
   return (
     <header className="horizon-bar" role="banner">
-      {/* Left: ZONA Brand Mark + Circle Workspace Selector Pill */}
+      {/* Left: Minimal ZONA Mark + Plain Text Circle Selector */}
       <div className="horizon-left">
         <button
           type="button"
@@ -102,7 +98,7 @@ export function HorizonBar({
           aria-label="ZONA Beranda"
         >
           <span className="horizon-brand-mark" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 64 64" fill="none">
+            <svg width="14" height="14" viewBox="0 0 64 64" fill="none">
               <path
                 d="M16 18H48L18 46H48"
                 stroke="currentColor"
@@ -115,31 +111,25 @@ export function HorizonBar({
           <span className="horizon-brand-name">ZONA</span>
         </button>
 
-        <span className="horizon-slash desktop-only" aria-hidden="true">/</span>
+        <span className="horizon-slash" aria-hidden="true">/</span>
 
         <div className="workspace-dropdown-wrap" ref={dropdownRef}>
           <button
             id="btn-circle-selector"
             type="button"
-            className={`workspace-pill ${menuOpen ? 'open' : ''}`}
+            className={`workspace-text-trigger ${menuOpen ? 'open' : ''}`}
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
           >
-            <span
-              className="workspace-dot"
-              style={{ background: activeCircle?.accentColor ?? 'var(--accent)' }}
-            />
             <span className="workspace-pill-label">
               {activeCircle ? activeCircle.name : 'Semua Circle'}
             </span>
-            <ChevronDown size={14} strokeWidth={2} className="workspace-chevron" />
+            <ChevronDown size={14} strokeWidth={1.8} className="workspace-chevron" />
           </button>
 
           {menuOpen && (
             <div className="workspace-menu" role="menu">
-              <div className="workspace-menu-section">RUANG LINGKUP</div>
-
               <button
                 type="button"
                 className={`workspace-menu-item ${activeCircleId === null ? 'active' : ''}`}
@@ -150,17 +140,15 @@ export function HorizonBar({
                 }}
               >
                 <span className="workspace-item-icon">
-                  <Users size={14} strokeWidth={1.9} />
+                  <Users size={14} strokeWidth={1.8} />
                 </span>
                 <div className="workspace-item-copy">
                   <strong>Semua Circle</strong>
-                  <span>Gabungan seluruh teman & obrolan</span>
                 </div>
-                {activeCircleId === null && <Check size={15} strokeWidth={2.2} color="var(--accent)" />}
+                {activeCircleId === null && <Check size={14} strokeWidth={2.2} />}
               </button>
 
               <div className="workspace-menu-divider" />
-              <div className="workspace-menu-section">CIRCLE KAMU</div>
 
               {circles.map((circle) => {
                 const selected = activeCircleId === circle.id;
@@ -178,17 +166,12 @@ export function HorizonBar({
                         setMenuOpen(false);
                       }}
                     >
-                      <span
-                        className="workspace-circle-chip"
-                        style={{ background: circle.accentColor }}
-                      >
-                        {circle.shortCode}
-                      </span>
+                      <span className="workspace-circle-chip">{circle.shortCode}</span>
                       <div className="workspace-item-copy">
                         <strong>{circle.name}</strong>
-                        <span>{circle.memberIds.length} anggota · {circle.inviteCode}</span>
+                        <span>{circle.memberIds.length} anggota</span>
                       </div>
-                      {selected && <Check size={15} strokeWidth={2.2} color="var(--accent)" />}
+                      {selected && <Check size={14} strokeWidth={2.2} />}
                     </button>
                     <button
                       type="button"
@@ -200,7 +183,7 @@ export function HorizonBar({
                       title="Salin tautan undangan"
                       aria-label={`Salin undangan ${circle.name}`}
                     >
-                      <Link2 size={14} strokeWidth={1.9} />
+                      <Link2 size={14} strokeWidth={1.8} />
                     </button>
                   </div>
                 );
@@ -217,8 +200,8 @@ export function HorizonBar({
                   onOpenCircleModal();
                 }}
               >
-                <Plus size={15} strokeWidth={2} />
-                <span>Buat / Gabung Circle</span>
+                <Plus size={14} strokeWidth={2} />
+                <span>Buat atau Gabung Circle</span>
               </button>
             </div>
           )}
@@ -226,71 +209,72 @@ export function HorizonBar({
 
         {!isOnline && (
           <span className="horizon-offline-badge" title="Mode Offline">
-            <WifiOff size={13} strokeWidth={2} />
+            <WifiOff size={13} strokeWidth={1.9} />
             <span className="desktop-only">Offline</span>
           </span>
         )}
       </div>
 
-      {/* Center: 3-Way Horizon Switcher (Desktop Only) */}
-      <nav className="horizon-switcher desktop-only" aria-label="Navigasi Utama ZONA">
+      {/* Center: 3 Clean Text Tabs with 2px Active Underline (Desktop Only) */}
+      <nav className="horizon-tabs desktop-only" aria-label="Navigasi Utama ZONA">
         <button
           id="nav-world-pulse"
           type="button"
-          className={`horizon-tab ${world === 'pulse' ? 'active' : ''}`}
+          className={`horizon-text-tab ${world === 'pulse' ? 'active' : ''}`}
           onClick={() => onChangeWorld('pulse')}
           aria-current={world === 'pulse' ? 'page' : undefined}
         >
-          <Compass size={15} strokeWidth={1.9} />
           <span>Pulse</span>
         </button>
 
         <button
           id="nav-world-ruang"
           type="button"
-          className={`horizon-tab ${world === 'ruang' ? 'active' : ''}`}
+          className={`horizon-text-tab ${world === 'ruang' ? 'active' : ''}`}
           onClick={() => onChangeWorld('ruang')}
           aria-current={world === 'ruang' ? 'page' : undefined}
         >
-          <MessageSquare size={15} strokeWidth={1.9} />
           <span>Ruang</span>
-          {totalUnread > 0 && <span className="horizon-tab-badge">{totalUnread}</span>}
+          {totalUnread > 0 && <span className="lamp-dot" aria-label={`${totalUnread} belum dibaca`} />}
         </button>
 
         <button
           id="nav-world-peta"
           type="button"
-          className={`horizon-tab ${world === 'peta' ? 'active' : ''}`}
+          className={`horizon-text-tab ${world === 'peta' ? 'active' : ''}`}
           onClick={() => onChangeWorld('peta')}
           aria-current={world === 'peta' ? 'page' : undefined}
         >
-          <MapIcon size={15} strokeWidth={1.9} />
           <span>Peta</span>
-          {liveMapFriendsCount > 0 && <span className="horizon-live-dot" aria-hidden="true" />}
+          {liveMapFriendsCount > 0 && <span className="lamp-dot subtle" aria-hidden="true" />}
         </button>
       </nav>
 
-      {/* Right: + Ajak Kumpul CTA, Theme Toggle, Profile Avatar */}
+      {/* Right: + Kumpul, Physical Light Switch Toggle (Hidup/Mati), Profile Avatar */}
       <div className="horizon-right">
         <button
           id="btn-horizon-hangout"
           type="button"
-          className="horizon-cta desktop-only"
+          className="horizon-plain-btn desktop-only"
           onClick={onOpenHangoutModal}
         >
-          <MapPin size={15} strokeWidth={2} />
-          <span>Ajak Kumpul</span>
+          <Plus size={14} strokeWidth={2} />
+          <span>Kumpul</span>
         </button>
 
+        {/* Tactile Physical Light Switch (Lampu Hidup / Mati) */}
         <button
           id="btn-theme-toggle"
           type="button"
-          className="horizon-icon-btn"
+          role="switch"
+          aria-checked={isLightOn}
+          className={`lamp-switch ${isLightOn ? 'on' : 'off'}`}
           onClick={onToggleTheme}
-          title={theme === 'dark' ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
-          aria-label="Ganti Tema"
+          title={isLightOn ? 'Matikan lampu (Mode Gelap)' : 'Hidupkan lampu (Mode Terang)'}
+          aria-label={isLightOn ? 'Lampu Hidup — klik untuk Mode Gelap' : 'Lampu Mati — klik untuk Mode Terang'}
         >
-          {theme === 'dark' ? <Sun size={17} strokeWidth={1.85} /> : <Moon size={17} strokeWidth={1.85} />}
+          <span className="lamp-switch-led" aria-hidden="true" />
+          <span className="lamp-switch-knob" aria-hidden="true" />
         </button>
 
         <button
@@ -298,18 +282,16 @@ export function HorizonBar({
           type="button"
           className="horizon-avatar-btn"
           onClick={onOpenSettings}
-          title="Profil, Status & Pengaturan"
+          title="Profil & Pengaturan"
           aria-label="Buka Profil dan Pengaturan"
         >
           <Avatar
             initials={me?.initials ?? 'RZ'}
-            color={me?.avatarColor ?? '#E05A3F'}
+            color={me?.avatarColor ?? '#0A0A0A'}
             variant={me?.avatarVariant ?? 0}
             seed={currentUserId}
             avatarUrl={me?.avatarUrl}
             size="sm"
-            online={isOnline}
-            showPresence
           />
         </button>
       </div>

@@ -1,142 +1,154 @@
 /* ============================================================================
- * ZONA Original Editorial Design System — Horizon Bar + 3 Worlds (Pulse · Ruang · Peta)
- * Warm Alabaster Editorial (Light) × Deep Espresso Obsidian (Dark)
- * Primary: Terracotta Vermilion (#E05A3F) | Live Audio/Online: Deep Teal (#0D9488)
+ * ZONA — "Lampu Hidup / Mati" (ON / OFF) Ultra-Minimalist Design System
+ * Light (ON): #FFFFFF | Dark (OFF): #0A0A0A | Single Indicator Lamp: #E05A3F
  * ============================================================================ */
 
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
 
-  /* Light Mode — Warm Alabaster Editorial */
-  --bg-outer: #f7f5f0;
+  /* Lampu Hidup (Light Mode) */
+  --bg-outer: #ffffff;
   --bg-panel: #ffffff;
   --bg-sidebar: #ffffff;
-  --bg-canvas: #f7f5f0;
-  --bg-header-glass: rgba(247, 245, 240, 0.86);
-  --bg-composer-glass: rgba(247, 245, 240, 0.9);
-  --bg-input: #efece5;
+  --bg-canvas: #ffffff;
+  --bg-header-glass: rgba(255, 255, 255, 0.92);
+  --bg-composer-glass: #ffffff;
+  --bg-input: #f5f5f5;
   --bg-elevated: #ffffff;
-  --bg-hover: rgba(28, 25, 23, 0.045);
-  --bg-selected: rgba(28, 25, 23, 0.075);
-  --bg-bubble-in: #ffffff;
-  --bubble-out-bg: #1c1917;
-  --bubble-out-text: #fafaf9;
-  --bubble-out-meta: rgba(250, 250, 249, 0.72);
-  --bg-pill-glass: rgba(255, 255, 255, 0.9);
-  --bg-scrim: rgba(28, 25, 23, 0.48);
+  --bg-hover: #f5f5f5;
+  --bg-selected: #f0f0f0;
+  --bg-bubble-in: #f5f5f5;
+  --bubble-out-bg: #0a0a0a;
+  --bubble-out-text: #ffffff;
+  --bubble-out-meta: rgba(255, 255, 255, 0.65);
+  --bg-pill-glass: rgba(255, 255, 255, 0.94);
+  --bg-scrim: rgba(10, 10, 10, 0.42);
 
-  --border-hairline: rgba(28, 25, 23, 0.08);
-  --border-strong: rgba(28, 25, 23, 0.14);
+  --border-hairline: #eaeaea;
+  --border-strong: #d4d4d4;
 
-  --text-primary: #1c1917;
-  --text-secondary: #57534e;
-  --text-muted: #a8a29e;
+  --text-primary: #0a0a0a;
+  --text-secondary: #6e6e73;
+  --text-muted: #9a9aa0;
 
-  /* Original ZONA Brand Primary & Live Accent */
-  --accent: #e05a3f;
-  --accent-hover: #c94930;
+  /* ON / Active State (Monochrome High-Contrast Switch) */
+  --on-bg: #0a0a0a;
+  --on-text: #ffffff;
+
+  /* Single Indicator Lamp (6px-8px live/unread dots ONLY — not giant fills!) */
+  --lamp: #e05a3f;
+  --lamp-glow: none;
+
+  /* Keep semantic tokens mapped cleanly to monochrome ON/OFF + Lamp */
+  --accent: #0a0a0a;
+  --accent-hover: #262626;
   --accent-ink: #ffffff;
-  --accent-soft: rgba(224, 90, 63, 0.12);
+  --accent-soft: #f5f5f5;
 
-  --live: #0d9488;
-  --live-soft: rgba(13, 148, 136, 0.13);
+  --live: #e05a3f;
+  --live-soft: rgba(224, 90, 63, 0.1);
 
-  /* Semantic Indicators */
-  --read-blue: #0d9488;
+  --read-blue: #6e6e73;
   --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, 0.11);
-  --warning: #d97706;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --warning: #b45309;
 
-  /* Editorial Tactile Depth Shadows */
-  --shadow-panel: 0 2px 12px rgba(28, 25, 23, 0.045), 0 0.5px 2px rgba(28, 25, 23, 0.03);
-  --shadow-bubble: 0 1px 3px rgba(28, 25, 23, 0.06), 0 0.5px 1px rgba(28, 25, 23, 0.03);
-  --shadow-float: 0 8px 24px rgba(28, 25, 23, 0.09), 0 1px 4px rgba(28, 25, 23, 0.05);
-  --shadow-popover: 0 14px 36px rgba(28, 25, 23, 0.14), 0 2px 6px rgba(28, 25, 23, 0.06);
-  --shadow-sheet: 0 -8px 28px rgba(28, 25, 23, 0.11);
+  /* Zero decorative shadows — subtle elevation ONLY for popovers/modals/docks */
+  --shadow-panel: none;
+  --shadow-bubble: none;
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-popover: 0 8px 28px rgba(0, 0, 0, 0.11);
+  --shadow-sheet: 0 -4px 20px rgba(0, 0, 0, 0.06);
 
-  /* Subtle Warm Editorial Grain/Botanical Pattern (Light) */
-  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cg fill='none' stroke='%231C1917' stroke-opacity='0.032' stroke-width='1.1'%3E%3Ccircle cx='18' cy='18' r='6'/%3E%3Cpath d='M62 14 C68 14 74 20 74 26 C68 26 62 20 62 14 Z'/%3E%3Ccircle cx='76' cy='72' r='5'/%3E%3Cpath d='M22 68 Q30 60 38 68 T54 68'/%3E%3Ccircle cx='48' cy='42' r='2.2' fill='%231C1917' fill-opacity='0.03' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+  /* Clean Plain Canvas — Zero Doodle Wallpaper */
+  --chat-pattern: none;
 
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
   --radius-pill: 9999px;
 }
 
 [data-theme='dark'] {
-  /* Dark Mode — Deep Espresso Obsidian */
-  --bg-outer: #111012;
-  --bg-panel: #19181c;
-  --bg-sidebar: #19181c;
-  --bg-canvas: #141316;
-  --bg-header-glass: rgba(17, 16, 18, 0.86);
-  --bg-composer-glass: rgba(20, 19, 22, 0.9);
-  --bg-input: #242228;
-  --bg-elevated: #19181c;
-  --bg-hover: rgba(245, 243, 239, 0.055);
-  --bg-selected: rgba(245, 243, 239, 0.09);
-  --bg-bubble-in: #222027;
-  --bubble-out-bg: #e05a3f;
-  --bubble-out-text: #faf5f0;
-  --bubble-out-meta: rgba(250, 245, 240, 0.8);
-  --bg-pill-glass: rgba(25, 24, 28, 0.9);
-  --bg-scrim: rgba(0, 0, 0, 0.68);
+  /* Lampu Mati (Dark Mode) */
+  --bg-outer: #0a0a0a;
+  --bg-panel: #0a0a0a;
+  --bg-sidebar: #0a0a0a;
+  --bg-canvas: #0a0a0a;
+  --bg-header-glass: rgba(10, 10, 10, 0.92);
+  --bg-composer-glass: #0a0a0a;
+  --bg-input: #161616;
+  --bg-elevated: #141414;
+  --bg-hover: #161616;
+  --bg-selected: #1c1c1c;
+  --bg-bubble-in: #1a1a1a;
+  --bubble-out-bg: #f5f5f5;
+  --bubble-out-text: #0a0a0a;
+  --bubble-out-meta: rgba(10, 10, 10, 0.6);
+  --bg-pill-glass: rgba(18, 18, 18, 0.94);
+  --bg-scrim: rgba(0, 0, 0, 0.72);
 
-  --border-hairline: rgba(245, 243, 239, 0.08);
-  --border-strong: rgba(245, 243, 239, 0.14);
+  --border-hairline: #222222;
+  --border-strong: #333333;
 
-  --text-primary: #f5f3ef;
-  --text-secondary: #a8a29e;
-  --text-muted: #716d69;
+  --text-primary: #f5f5f5;
+  --text-secondary: #8e8e93;
+  --text-muted: #5c5c60;
 
-  --accent: #e05a3f;
-  --accent-hover: #c94930;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(224, 90, 63, 0.2);
+  --on-bg: #ffffff;
+  --on-text: #0a0a0a;
 
-  --live: #14b8a6;
-  --live-soft: rgba(20, 184, 166, 0.18);
+  /* Tiny Glowing LED Lamp in Dark Room */
+  --lamp: #ff5a36;
+  --lamp-glow: 0 0 8px rgba(255, 90, 54, 0.55);
 
-  --read-blue: #2dd4bf;
+  --accent: #ffffff;
+  --accent-hover: #e5e5e5;
+  --accent-ink: #0a0a0a;
+  --accent-soft: #1a1a1a;
+
+  --live: #ff5a36;
+  --live-soft: rgba(255, 90, 54, 0.14);
+
+  --read-blue: #8e8e93;
   --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.16);
+  --danger-soft: rgba(248, 113, 113, 0.14);
   --warning: #f59e0b;
 
-  --shadow-panel: 0 4px 18px rgba(0, 0, 0, 0.36), 0 1px 2px rgba(0, 0, 0, 0.24);
-  --shadow-bubble: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-float: 0 10px 28px rgba(0, 0, 0, 0.46), 0 1px 3px rgba(0, 0, 0, 0.28);
-  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.56), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-sheet: 0 -10px 32px rgba(0, 0, 0, 0.48);
+  --shadow-panel: none;
+  --shadow-bubble: none;
+  --shadow-float: 0 6px 20px rgba(0, 0, 0, 0.48);
+  --shadow-popover: 0 12px 34px rgba(0, 0, 0, 0.64);
+  --shadow-sheet: 0 -6px 24px rgba(0, 0, 0, 0.5);
 
-  /* Subtle Warm Pattern (Dark) */
-  --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cg fill='none' stroke='%23F5F3EF' stroke-opacity='0.032' stroke-width='1.1'%3E%3Ccircle cx='18' cy='18' r='6'/%3E%3Cpath d='M62 14 C68 14 74 20 74 26 C68 26 62 20 62 14 Z'/%3E%3Ccircle cx='76' cy='72' r='5'/%3E%3Cpath d='M22 68 Q30 60 38 68 T54 68'/%3E%3Ccircle cx='48' cy='42' r='2.2' fill='%23F5F3EF' fill-opacity='0.028' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+  --chat-pattern: none;
 }
 
-/* 4 Curated Editorial Chat Wallpaper Themes (Light & Dark Adaptive) */
+/* Optional Subtle Canvas Tints — Default Pure White / Pure Black */
 .zona-app-shell[data-chat-theme='clean'] {
-  --bg-canvas: #f7f5f0;
+  --bg-canvas: #ffffff;
 }
 .zona-app-shell[data-chat-theme='warm-sand'] {
-  --bg-canvas: #f3ece2;
+  --bg-canvas: #fafafa;
 }
 .zona-app-shell[data-chat-theme='ocean-mist'] {
-  --bg-canvas: #eef3f4;
+  --bg-canvas: #f8f9fa;
 }
 .zona-app-shell[data-chat-theme='midnight-forest'] {
-  --bg-canvas: #eff2ee;
+  --bg-canvas: #f8f8f8;
 }
 
 [data-theme='dark'] .zona-app-shell[data-chat-theme='clean'] {
-  --bg-canvas: #141316;
+  --bg-canvas: #0a0a0a;
 }
 [data-theme='dark'] .zona-app-shell[data-chat-theme='warm-sand'] {
-  --bg-canvas: #1b1715;
+  --bg-canvas: #0d0d0d;
 }
 [data-theme='dark'] .zona-app-shell[data-chat-theme='ocean-mist'] {
-  --bg-canvas: #13191d;
+  --bg-canvas: #0b0d0e;
 }
 [data-theme='dark'] .zona-app-shell[data-chat-theme='midnight-forest'] {
-  --bg-canvas: #141917;
+  --bg-canvas: #0b0c0b;
 }
 
 *,
